@@ -1,15 +1,15 @@
 """Create this project's native Unreal materials, sounds and editable map.
 
-Runs automatically on the first editor startup. Can also be selected through
-Tools > Execute Python Script. It does not rebuild an existing map or overwrite
-existing assets. Python is used only in the editor, never by the packaged game.
+Runs automatically on editor startup, or through Tools > Execute Python Script.
+Refreshes lighting and checkpoint markers in an existing map while keeping its
+layout. Python is used only in the editor, never by the packaged game.
 """
 from pathlib import Path
 import re
 import unreal
 
 ASSET_ROOT = "/Game/ClockArena"
-MATERIAL = ASSET_ROOT + "/Materials/M_Arena"
+MATERIAL = ASSET_ROOT + "/Materials/M_ArenaDaylight"
 MAP = "/Game/ClockArena/Maps/L_ClockArena"
 
 
@@ -22,11 +22,11 @@ def _material():
         return
     tools = unreal.AssetToolsHelpers.get_asset_tools()
     mat = tools.create_asset(
-        "M_Arena", ASSET_ROOT + "/Materials",
+        "M_ArenaDaylight", ASSET_ROOT + "/Materials",
         unreal.Material, unreal.MaterialFactoryNew()
     )
     if mat is None:
-        raise RuntimeError("Could not create M_Arena.")
+        raise RuntimeError("Could not create M_ArenaDaylight.")
     edit = unreal.MaterialEditingLibrary
     tint = edit.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -500, -100)
     tint.set_editor_property("parameter_name", "Tint")
@@ -38,15 +38,20 @@ def _material():
     glow.set_editor_property("default_value", 0.0)
     glow.set_editor_property("use_custom_primitive_data", True)
     glow.set_editor_property("primitive_data_index", 4)
-    multiply = edit.create_material_expression(mat, unreal.MaterialExpressionMultiply, -200, 120)
+    ambient = edit.create_material_expression(mat, unreal.MaterialExpressionConstant, -700, 300)
+    ambient.set_editor_property("r", 0.35)
+    add = edit.create_material_expression(mat, unreal.MaterialExpressionAdd, -400, 220)
+    multiply = edit.create_material_expression(mat, unreal.MaterialExpressionMultiply, -100, 120)
     roughness = edit.create_material_expression(mat, unreal.MaterialExpressionConstant, -200, 320)
-    roughness.set_editor_property("r", 0.65)
+    roughness.set_editor_property("r", 0.82)
     metallic = edit.create_material_expression(mat, unreal.MaterialExpressionConstant, -200, 430)
-    metallic.set_editor_property("r", 0.15)
+    metallic.set_editor_property("r", 0.05)
     links = [
         edit.connect_material_property(tint, "", unreal.MaterialProperty.MP_BASE_COLOR),
         edit.connect_material_expressions(tint, "", multiply, "A"),
-        edit.connect_material_expressions(glow, "", multiply, "B"),
+        edit.connect_material_expressions(glow, "", add, "A"),
+        edit.connect_material_expressions(ambient, "", add, "B"),
+        edit.connect_material_expressions(add, "", multiply, "B"),
         edit.connect_material_property(multiply, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR),
         edit.connect_material_property(roughness, "", unreal.MaterialProperty.MP_ROUGHNESS),
         edit.connect_material_property(metallic, "", unreal.MaterialProperty.MP_METALLIC),
@@ -91,11 +96,24 @@ def _set_default_maps():
 
 
 def _map():
-    if unreal.EditorAssetLibrary.does_asset_exist(MAP):
-        _set_default_maps()
-        return False
     levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
     actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    if unreal.EditorAssetLibrary.does_asset_exist(MAP):
+        world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+        if world is None or world.get_name() != "L_ClockArena":
+            if not levels.load_level(MAP):
+                raise RuntimeError("Could not open the saved Clock Arena map.")
+        refreshed = 0
+        for actor in actors.get_all_level_actors():
+            if actor.get_class().get_path_name() == "/Script/ShootingExpansion.CAArenaBuilder":
+                actor.refresh_presentation()
+                refreshed += 1
+        if not refreshed:
+            raise RuntimeError("The saved arena has no CAArenaBuilder to refresh. Your existing map was preserved.")
+        if not levels.save_current_level():
+            raise RuntimeError("Could not save the lighting and checkpoint upgrade.")
+        _set_default_maps()
+        return False
     builder_class = unreal.load_class(None, "/Script/ShootingExpansion.CAArenaBuilder")
     if builder_class is None:
         raise RuntimeError("The ShootingExpansion C++ module is not compiled or loaded.")
@@ -128,7 +146,7 @@ def prepare():
     _sounds()
     created = _map()
     unreal.log(
-        "CLOCK ARENA READY. Press Play, then click the viewport to start."
+        "CLOCK ARENA READY / DAYLIGHT + CHECKPOINT FLAGS. Press Play, then click the viewport to start."
         + (" Native map, material and sounds have been generated." if created else "")
     )
 

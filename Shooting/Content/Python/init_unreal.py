@@ -7,6 +7,8 @@ _arena_handle = None
 
 def _arena_first_tick(_delta):
     global _arena_handle
+    if unreal.AssetRegistryHelpers.get_asset_registry().is_loading_assets():
+        return
     if _arena_handle is not None:
         unreal.unregister_slate_post_tick_callback(_arena_handle)
         _arena_handle = None

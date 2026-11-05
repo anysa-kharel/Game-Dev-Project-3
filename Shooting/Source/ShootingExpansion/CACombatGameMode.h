@@ -2,6 +2,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "CombatRules.h"
+#include "WayfindingRules.h"
 #include "CACombatGameMode.generated.h"
 class ACAEnemy;
 class ACAClockBridge;
@@ -48,6 +49,8 @@ public:
     void TryWin();
     void Say(const FString& Text,float Duration=4);
     FString Objective() const;
+    Wayfinding::Stage GuidanceStage() const;
+    FString WaypointLabel() const;
     FVector Waypoint() const;
     FVector PlayerAimPoint() const;
     UFUNCTION() void PlayerDamaged(AActor* Actor,float Damage,const UDamageType* Type,

@@ -38,6 +38,7 @@ void ACACombatGameMode::BeginPlay()
     ACAArenaBuilder* Builder=Existing ? *Existing : nullptr;
     if (!Builder) Builder=GetWorld()->SpawnActor<ACAArenaBuilder>();
     if (Builder && !Builder->bBuilt) Builder->BuildArena();
+    else if (Builder) Builder->RefreshPresentation();
     for (TActorIterator<ACAEnemy> It(GetWorld());It;++It) Enemies.Add(*It);
     TActorIterator<ACAClockBridge> Bridges(GetWorld());
     Clock=Bridges ? *Bridges : nullptr;
@@ -79,7 +80,7 @@ void ACACombatGameMode::SetupPlayer()
     PC->bShowMouseCursor=false;
     FInputModeGameOnly Mode; Mode.SetConsumeCaptureMouseDown(false); PC->SetInputMode(Mode);
     RestorePlayer();
-    Say(TEXT("CLEAR THE YARD / Use cover. Red robots shoot; gold scouts rush. F1 shows controls."),8);
+    Say(TEXT("CLEAR THE YARD, THEN FOLLOW GOLD ARROWS / FLAG 1 > CLOCK HAND > FLAG 2 > EXIT. F1: help."),8);
 }
 void ACACombatGameMode::Tick(float DeltaSeconds)
 {
@@ -124,17 +125,17 @@ void ACACombatGameMode::EnemyDefeated(ACAEnemy* Enemy)
 {
     if (!Enemy || !Enemies.Contains(Enemy)) return;
     ++Defeated;
-    if (RemainingEnemies()==0) Say(TEXT("ALL HOSTILES CLEARED / The extraction door is open."),6);
+    if (RemainingEnemies()==0) Say(TEXT("ALL HOSTILES CLEARED / Follow the EXIT marker to the GREEN exit flag."),6);
     else if (RemainingInSection(1)==0 && CheckpointIndex<2)
-        Say(TEXT("YARD CLEARED / Follow the cyan route and ride the giant clock hand."),6);
+        Say(TEXT("YARD CLEARED / Follow GOLD floor arrows to FLAG 1, then board the gold clock hand."),6);
 }
 void ACACombatGameMode::SaveCheckpoint(int32 Index)
 {
     if (!IsActive() || Index<=CheckpointIndex || Index>2) return;
     CheckpointIndex=Index; PlayerHealth.Reset();
     CA::Sound(GetWorld(),TEXT("S_Checkpoint"),PlayerPawn->GetActorLocation(),0.6f);
-    Say(Index==1 ? TEXT("CHECKPOINT / Board the GOLD clock hand at the 9 o'clock dock. It pauses to let you board.")
-        : TEXT("CHECKPOINT / FOUNDRY / Use the crates, shelters and raised galleries. Clear the remaining robots."),7);
+    Say(Index==1 ? TEXT("FLAG 1 SAVED / Your flag is GREEN. Board the GOLD hand at 9, then ride to FLAG 2.")
+        : TEXT("FLAG 2 SAVED / Clear the remaining robots, then follow the GREEN EXIT flag."),7);
 }
 void ACACombatGameMode::RefillMagazine()
 {
@@ -227,25 +228,82 @@ void ACACombatGameMode::TryWin()
     CA::Sound(GetWorld(),TEXT("S_Win"),PlayerPawn->GetActorLocation(),0.7f);
 }
 void ACACombatGameMode::Say(const FString& Text,float Duration) { Message=Text; MessageTime=Duration; }
+Wayfinding::Stage ACACombatGameMode::GuidanceStage() const
+{
+    return Wayfinding::NextStage(CheckpointIndex,RemainingInSection(1),RemainingInSection(2),
+        PlayerPawn ? PlayerPawn->GetActorLocation().X : -2150);
+}
 FString ACACombatGameMode::Objective() const
 {
-    if (RemainingInSection(1)>0 && CheckpointIndex<2) return TEXT("01 / CLEAR THE LOADING YARD");
-    if (CheckpointIndex<2) return TEXT("02 / RIDE THE CLOCK HAND TO THE FAR PATH");
-    if (RemainingEnemies()>0) return TEXT("03 / CLEAR THE FOUNDRY");
-    return TEXT("ALL CLEAR / REACH THE GREEN EXTRACTION BEACON");
+    switch (GuidanceStage())
+    {
+    case Wayfinding::Stage::ClearYard: return TEXT("CLEAR THE YARD / THEN REACH FLAG 1");
+    case Wayfinding::Stage::FlagOne: return TEXT("FOLLOW GOLD ARROWS TO CHECKPOINT FLAG 1");
+    case Wayfinding::Stage::BoardClock: return Clock && !CombatRules::AtDock(Clock->Angle(),false)
+        ? TEXT("WAIT AT 9 / BOARD THE HAND WHEN IT ARRIVES") : TEXT("BOARD GOLD HAND AT 9 / RIDE TO FLAG 2");
+    case Wayfinding::Stage::FlagTwo: return TEXT("STAY ON HAND TO 3 / THEN REACH FLAG 2");
+    case Wayfinding::Stage::ClearFoundry: return TEXT("CLEAR THE FOUNDRY / THEN REACH THE EXIT");
+    case Wayfinding::Stage::ReturnToYard: return TEXT("YARD ROBOTS REMAIN / RIDE CLOCK BACK");
+    default: return TEXT("EXIT OPEN / REACH THE GREEN EXIT FLAG");
+    }
+}
+FString ACACombatGameMode::WaypointLabel() const
+{
+    switch (GuidanceStage())
+    {
+    case Wayfinding::Stage::ClearYard: return TEXT("YARD ROBOT");
+    case Wayfinding::Stage::FlagOne: return TEXT("FLAG 1 / CHECKPOINT");
+    case Wayfinding::Stage::BoardClock: return Clock && !CombatRules::AtDock(Clock->Angle(),false)
+        ? TEXT("WAIT FOR GOLD HAND") : TEXT("BOARD GOLD HAND");
+    case Wayfinding::Stage::FlagTwo: return TEXT("FLAG 2 / FAR DOCK");
+    case Wayfinding::Stage::ClearFoundry: return TEXT("FOUNDRY ROBOT");
+    case Wayfinding::Stage::ReturnToYard: return PlayerPawn && PlayerPawn->GetActorLocation().X>5200
+        && Clock && !CombatRules::AtDock(Clock->Angle(),true)
+        ? TEXT("WAIT FOR RETURN HAND") : TEXT("RIDE BACK TO YARD");
+    default: return TEXT("GREEN EXIT FLAG");
+    }
 }
 FVector ACACombatGameMode::Waypoint() const
 {
-    if (!PlayerPawn) return FVector(-1000,0,150);
-    if (CheckpointIndex<2 && RemainingInSection(1)==0)
-        return PlayerPawn->GetActorLocation().X<3250 ? FVector(3070,0,120) : FVector(5600,0,120);
+    auto FlagLocation=[this](int32 Index,bool IsExit,const FVector& Fallback)
+    {
+        for (TActorIterator<ACAZone> It(GetWorld());It;++It)
+            if ((IsExit && It->Kind==ECAZoneKind::Exit) ||
+                (!IsExit && It->Kind==ECAZoneKind::Checkpoint && It->CheckpointIndex==Index))
+                return It->GetActorLocation()+FVector(0,-180,400);
+        return Fallback;
+    };
+    const double PlayerX=PlayerPawn ? PlayerPawn->GetActorLocation().X : -2150;
+    const FVector Center=Clock ? Clock->GetActorLocation() : FVector(4200,0,0);
+    const float Radius=Clock ? Clock->HandLength : 1200;
+    const bool NearReady=!Clock || CombatRules::AtDock(Clock->Angle(),false);
+    const bool FarReady=!Clock || CombatRules::AtDock(Clock->Angle(),true);
+    switch (GuidanceStage())
+    {
+    case Wayfinding::Stage::FlagOne:
+        return FlagLocation(1,false,FVector(2760,0,600));
+    case Wayfinding::Stage::BoardClock:
+        return Center+FVector(Wayfinding::BoardingOffset(Radius,false,NearReady),0,180);
+    case Wayfinding::Stage::FlagTwo:
+        return FlagLocation(2,false,FVector(5680,0,600));
+    case Wayfinding::Stage::ReturnToYard:
+        return Center+FVector(PlayerX>5200 ? Wayfinding::BoardingOffset(Radius,true,FarReady)
+            : Wayfinding::BoardingOffset(Radius,false,false),0,180);
+    case Wayfinding::Stage::Exit:
+        return FlagLocation(0,true,FVector(9780,0,600));
+    default:
+        break;
+    }
+    const int32 Section=GuidanceStage()==Wayfinding::Stage::ClearYard ? 1 : 2;
     const ACAEnemy* Closest=nullptr;
     double Distance=DBL_MAX;
     for (const ACAEnemy* Enemy : Enemies)
     {
-        if (!IsValid(Enemy) || Enemy->bDead || (CheckpointIndex<2 && Enemy->Section!=1)) continue;
-        const double D=FVector::DistSquared(PlayerPawn->GetActorLocation(),Enemy->GetActorLocation());
+        if (!IsValid(Enemy) || Enemy->bDead || Enemy->Section!=Section) continue;
+        const double D=FVector::DistSquared(PlayerPawn ? PlayerPawn->GetActorLocation() : FVector::ZeroVector,
+            Enemy->GetActorLocation());
         if (D<Distance) { Closest=Enemy; Distance=D; }
     }
-    return Closest ? Closest->GetActorLocation()+FVector(0,0,130) : FVector(9650,0,180);
+    return Closest ? Closest->GetActorLocation()+FVector(0,0,130)
+        : FlagLocation(0,true,FVector(9780,0,600));
 }

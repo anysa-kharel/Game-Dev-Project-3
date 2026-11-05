@@ -3,10 +3,17 @@
 #include "CAEnemy.h"
 #include "CAUtil.h"
 #include "ArenaLayout.h"
+#include "WayfindingRules.h"
+#include "Components/DirectionalLightComponent.h"
 #include "Components/LightComponent.h"
 #include "Components/SceneComponent.h"
+#include "Components/SkyAtmosphereComponent.h"
+#include "Components/SkyLightComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Engine/DirectionalLight.h"
+#include "Engine/PostProcessVolume.h"
+#include "Engine/SkyLight.h"
 #include "Engine/TextRenderActor.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -215,7 +222,6 @@ void ACAArenaBuilder::BuildArena()
             Block(FVector(X,Side*(2570+(I%2)*450),H-320),FVector(530,680,30),
                 CA::Gold(),false,0.6f);
         }
-        Block(FVector(3700,Side*4800,900),FVector(22000,100,6000),CA::Navy(),false,0.35f);
     }
     Block(FVector(3700,0,-1700),FVector(22000,14000,80),CA::Navy(),false,0.2f);
     for (float X : {0.0f,1800.0f,6500.0f,9000.0f})
@@ -225,26 +231,119 @@ void ACAArenaBuilder::BuildArena()
         Block(FVector(X,0,1310),FVector(100,3650,100),CA::Steel(),false);
         Block(FVector(X,0,1250),FVector(20,3350,16),CA::Cyan(),false,1.5f);
     }
-    ADirectionalLight* Key=GetWorld()->SpawnActor<ADirectionalLight>(ADirectionalLight::StaticClass(),
-        FVector(0,0,2500),FRotator(-55,-40,0));
-    if (Key)
-    {
-        Key->GetLightComponent()->SetMobility(EComponentMobility::Movable);
-        Key->GetLightComponent()->SetIntensity(5);
-        Key->GetLightComponent()->SetLightColor(FLinearColor(0.9f,0.95f,1));
-        CAConstruction::Tag(Key,TEXT("ClockArena/Lighting"));
-    }
-    ADirectionalLight* Fill=GetWorld()->SpawnActor<ADirectionalLight>(ADirectionalLight::StaticClass(),
-        FVector(0,0,2000),FRotator(-30,140,0));
-    if (Fill)
-    {
-        Fill->GetLightComponent()->SetMobility(EComponentMobility::Movable);
-        Fill->GetLightComponent()->SetIntensity(2);
-        Fill->GetLightComponent()->SetCastShadows(false);
-        CAConstruction::Tag(Fill,TEXT("ClockArena/Lighting"));
-    }
     APlayerStart* Start=GetWorld()->SpawnActor<APlayerStart>(APlayerStart::StaticClass(),
         FVector(-2150,0,110),FRotator::ZeroRotator);
     CAConstruction::Tag(Start,TEXT("ClockArena/PlayerStart"));
     bBuilt=true;
+    RefreshPresentation();
+}
+
+void ACAArenaBuilder::RefreshPresentation()
+{
+    if (!GetWorld()) return;
+    // One sun: forward shading does not use two directional lights as key/fill.
+    ADirectionalLight* Sun=nullptr;
+    TArray<ADirectionalLight*> OldSuns;
+    for (TActorIterator<ADirectionalLight> It(GetWorld());It;++It)
+        if (It->Tags.Contains(TEXT("CAExpansion"))) OldSuns.Add(*It);
+    if (OldSuns.Num()>0) Sun=OldSuns[0];
+    else Sun=GetWorld()->SpawnActor<ADirectionalLight>();
+    for (ADirectionalLight* Light : OldSuns) if (Light!=Sun) Light->Destroy();
+    if (Sun)
+    {
+        if (UDirectionalLightComponent* Light=Sun->FindComponentByClass<UDirectionalLightComponent>())
+        {
+            Light->SetMobility(EComponentMobility::Movable);
+            Sun->SetActorRotation(FRotator(-55,-35,0));
+            Light->SetForwardShadingPriority(10);
+            Light->SetAtmosphereSunLight(true);
+            Light->SetIntensity(Wayfinding::SunIntensity);
+            Light->SetLightColor(FLinearColor(1,0.98f,0.94f));
+            Light->SetCastShadows(true);
+        }
+        CAConstruction::Tag(Sun,TEXT("ClockArena/Lighting"));
+#if WITH_EDITOR
+        Sun->SetActorLabel(TEXT("Daylight Sun / Priority 10"));
+#endif
+    }
+    ASkyAtmosphere* Atmosphere=nullptr;
+    for (TActorIterator<ASkyAtmosphere> It(GetWorld());It;++It)
+        if (!Atmosphere) Atmosphere=*It;
+    if (!Atmosphere) Atmosphere=GetWorld()->SpawnActor<ASkyAtmosphere>();
+    CAConstruction::Tag(Atmosphere,TEXT("ClockArena/Lighting"));
+    ASkyLight* Sky=nullptr;
+    for (TActorIterator<ASkyLight> It(GetWorld());It;++It) if (!Sky) Sky=*It;
+    if (!Sky) Sky=GetWorld()->SpawnActor<ASkyLight>();
+    if (Sky)
+    {
+        if (USkyLightComponent* Light=Sky->FindComponentByClass<USkyLightComponent>())
+        {
+            Light->SetMobility(EComponentMobility::Movable);
+            Light->SourceType=SLS_CapturedScene;
+            Light->SetIntensity(Wayfinding::SkyIntensity);
+            Light->SetLightColor(FLinearColor(0.94f,0.98f,1));
+            // A light neutral lower hemisphere fills areas below the galleries.
+            Light->bLowerHemisphereIsBlack=true;
+            Light->LowerHemisphereColor=FLinearColor(0.35f,0.39f,0.43f);
+            Light->SetCastShadows(false);
+            Light->SetRealTimeCapture(true);
+            Light->RecaptureSky();
+        }
+        CAConstruction::Tag(Sky,TEXT("ClockArena/Lighting"));
+    }
+    APostProcessVolume* Exposure=nullptr;
+    for (TActorIterator<APostProcessVolume> It(GetWorld());It;++It)
+        if (It->Tags.Contains(TEXT("CAVisibility"))) { Exposure=*It; break; }
+    if (!Exposure) Exposure=GetWorld()->SpawnActor<APostProcessVolume>();
+    if (Exposure)
+    {
+        Exposure->Tags.AddUnique(TEXT("CAVisibility"));
+        CAConstruction::Tag(Exposure,TEXT("ClockArena/Lighting"));
+        Exposure->bUnbound=true; Exposure->Priority=100; Exposure->BlendWeight=1;
+        FPostProcessSettings& Settings=Exposure->Settings;
+        Settings.bOverride_AutoExposureMinBrightness=true; Settings.AutoExposureMinBrightness=1;
+        Settings.bOverride_AutoExposureMaxBrightness=true; Settings.AutoExposureMaxBrightness=1;
+        Settings.bOverride_AutoExposureBias=true; Settings.AutoExposureBias=0;
+        Settings.bOverride_AmbientOcclusionIntensity=true; Settings.AmbientOcclusionIntensity=0.1f;
+        Settings.bOverride_VignetteIntensity=true; Settings.VignetteIntensity=0;
+        Settings.bOverride_BloomIntensity=true; Settings.BloomIntensity=0.15f;
+    }
+    TArray<ACAScenery*> OldArrows;
+    for (TActorIterator<ACAScenery> It(GetWorld());It;++It)
+    {
+        ACAScenery* Item=*It;
+        if (!Item->Tags.Contains(TEXT("CAExpansion"))) continue;
+        if (Item->Tags.Contains(TEXT("CARouteArrow"))) { OldArrows.Add(Item); continue; }
+        // Replace only the original oversized black backdrop, not the user's walls.
+        if (!Item->bSolid && Item->Dimensions.Equals(FVector(22000,100,6000),0.1f))
+        { Item->Destroy(); continue; }
+        if (Item->Color.Equals(FLinearColor(0.025f,0.05f,0.08f),0.001f)) Item->Color=CA::Navy();
+        else if (Item->Color.Equals(FLinearColor(0.12f,0.18f,0.23f),0.001f)) Item->Color=CA::Steel();
+        Item->OnConstruction(Item->GetActorTransform());
+        if (!Item->bSolid) Item->Mesh->SetCastShadow(false);
+    }
+    // This owns only the new decorative arrows. Gameplay actors and map edits stay put.
+    for (ACAScenery* Arrow : OldArrows) Arrow->Destroy();
+    for (const auto& Arrow : Wayfinding::Arrows)
+    {
+        const FRotator Rotation(0,Arrow.Yaw,0);
+        const FVector Origin(Arrow.X,Arrow.Y,6);
+        auto Stripe=[&](const FVector& Offset,const FVector& Size,float Yaw)
+        {
+            const FTransform Transform(FRotator(0,Arrow.Yaw+Yaw,0),Origin+Rotation.RotateVector(Offset));
+            ACAScenery* Part=GetWorld()->SpawnActorDeferred<ACAScenery>(ACAScenery::StaticClass(),Transform,
+                this,nullptr,ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+            if (!Part) return;
+            Part->Dimensions=Size; Part->Color=CA::Gold(); Part->Glow=0.55f; Part->bSolid=false;
+            Part->FinishSpawning(Transform);
+            Part->Mesh->SetCastShadow(false);
+            Part->Tags.AddUnique(TEXT("CARouteArrow"));
+            CAConstruction::Tag(Part,TEXT("ClockArena/RouteArrows"));
+        };
+        Stripe(FVector(-25,0,0),FVector(90,20,3),0);
+        Stripe(FVector(25,-22,0),FVector(70,20,3),40);
+        Stripe(FVector(25,22,0),FVector(70,20,3),-40);
+    }
+    for (TActorIterator<ACAZone> It(GetWorld());It;++It) It->RefreshMarker();
+    for (TActorIterator<ACAClockBridge> It(GetWorld());It;++It) It->OnConstruction(It->GetActorTransform());
 }

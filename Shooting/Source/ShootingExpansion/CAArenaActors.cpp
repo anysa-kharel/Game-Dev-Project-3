@@ -2,10 +2,12 @@
 #include "CACombatGameMode.h"
 #include "CAUtil.h"
 #include "CombatRules.h"
+#include "WayfindingRules.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/TextRenderComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -85,18 +87,81 @@ void ACAClockBridge::Tick(float DeltaSeconds)
 
 ACAZone::ACAZone()
 {
+    PrimaryActorTick.bCanEverTick=true;
+    PrimaryActorTick.TickInterval=0.15f;
     Trigger=CreateDefaultSubobject<UBoxComponent>(TEXT("Zone")); SetRootComponent(Trigger);
     Trigger->SetBoxExtent(FVector(120,460,200));
     Trigger->SetCollisionProfileName(TEXT("Trigger"));
     Trigger->SetGenerateOverlapEvents(true);
     Trigger->OnComponentBeginOverlap.AddDynamic(this,&ACAZone::Enter);
     Beacon=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Beacon")); Beacon->SetupAttachment(Trigger);
+    FlagPole=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CheckpointFlagPole")); FlagPole->SetupAttachment(Trigger);
+    Flag=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CheckpointFlag")); Flag->SetupAttachment(Trigger);
+    FlagCap=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CheckpointFlagCap")); FlagCap->SetupAttachment(Trigger);
+    FlagFront=CreateDefaultSubobject<UTextRenderComponent>(TEXT("FlagLabelFront")); FlagFront->SetupAttachment(Trigger);
+    FlagBack=CreateDefaultSubobject<UTextRenderComponent>(TEXT("FlagLabelBack")); FlagBack->SetupAttachment(Trigger);
 }
 void ACAZone::OnConstruction(const FTransform& Transform)
 {
     Super::OnConstruction(Transform);
-    CA::Mesh(Beacon,TEXT("Cube"),FVector(14,820,8),Kind==ECAZoneKind::Exit ? CA::Mint() : CA::Cyan(),1.8f,false);
-    Beacon->SetRelativeLocation(FVector(0,0,-190));
+    RefreshMarker();
+}
+void ACAZone::RefreshMarker()
+{
+    const FLinearColor Color=Kind==ECAZoneKind::Exit ? CA::Gold() : CA::Cyan();
+    CA::Mesh(Beacon,TEXT("Cube"),FVector(220,840,5),Color,0.45f,false);
+    Beacon->SetRelativeLocation(FVector(0,0,-196));
+    CA::Mesh(FlagPole,TEXT("Cylinder"),FVector(12,12,Wayfinding::FlagHeight),CA::White(),0.1f,false);
+    FlagPole->SetRelativeLocation(FVector(0,-340,Wayfinding::FlagHeight*0.5f-200));
+    CA::Mesh(Flag,TEXT("Cube"),FVector(16,300,180),Color,0.8f,false);
+    Flag->SetRelativeLocation(FVector(0,-180,400));
+    CA::Mesh(FlagCap,TEXT("Sphere"),FVector(25),Color,1.0f,false);
+    FlagCap->SetRelativeLocation(FVector(0,-340,Wayfinding::FlagHeight-200));
+    for (UTextRenderComponent* Text : {FlagFront.Get(),FlagBack.Get()})
+    {
+        Text->SetHorizontalAlignment(EHTA_Center);
+        Text->SetVerticalAlignment(EVRTA_TextCenter);
+        Text->SetWorldSize(38);
+        Text->SetTextRenderColor(FColor::White);
+        Text->SetCastShadow(false);
+    }
+    FlagFront->SetRelativeLocation(FVector(-10,-180,400));
+    FlagFront->SetRelativeRotation(FRotator(0,180,0));
+    FlagBack->SetRelativeLocation(FVector(10,-180,400));
+    FlagBack->SetRelativeRotation(FRotator::ZeroRotator);
+    LastMarkerState=-1;
+    UpdateMarker();
+}
+void ACAZone::BeginPlay()
+{
+    Super::BeginPlay();
+    RefreshMarker();
+}
+void ACAZone::Tick(float DeltaSeconds)
+{
+    Super::Tick(DeltaSeconds);
+    UpdateMarker();
+}
+void ACAZone::UpdateMarker()
+{
+    const ACACombatGameMode* G=CA::Game(GetWorld());
+    const int32 Saved=G ? G->CheckpointIndex : 0;
+    // The editor and the first BeginPlay callbacks must not show an unlocked exit.
+    const int32 Remaining=G && G->bReady && G->TotalEnemies>0 ? G->RemainingEnemies() : 12;
+    const auto State=Wayfinding::StateFor(CheckpointIndex,Saved,Remaining,Kind==ECAZoneKind::Exit);
+    const int32 Key=static_cast<int32>(State);
+    if (Key==LastMarkerState) return;
+    LastMarkerState=Key;
+    const bool Green=State==Wayfinding::FlagState::Saved || State==Wayfinding::FlagState::Open;
+    const FLinearColor Color=Green ? CA::Mint() : State==Wayfinding::FlagState::Locked ? CA::Gold() : CA::Cyan();
+    const FString Label=Kind==ECAZoneKind::Exit
+        ? (Green ? TEXT("EXIT\nGO HERE") : TEXT("EXIT\nLOCKED"))
+        : FString::Printf(TEXT("FLAG %d\n%s"),CheckpointIndex,Green ? TEXT("SAVED") : TEXT("CHECKPOINT"));
+    FlagFront->SetText(FText::FromString(Label));
+    FlagBack->SetText(FText::FromString(Label));
+    CA::Tint(Flag,Color,State==Wayfinding::FlagState::Next ? 1.1f : 0.8f);
+    CA::Tint(FlagCap,Color,1.0f);
+    CA::Tint(Beacon,Color,0.45f);
 }
 void ACAZone::Enter(UPrimitiveComponent* Component,AActor* OtherActor,
     UPrimitiveComponent* OtherComp,int32 OtherBodyIndex,bool bFromSweep,const FHitResult& Hit)

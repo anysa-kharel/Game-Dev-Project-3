@@ -5,8 +5,8 @@ class UWorld;
 class ACACombatGameMode;
 namespace CA
 {
-    inline FLinearColor Navy() { return FLinearColor(0.025f,0.05f,0.08f); }
-    inline FLinearColor Steel() { return FLinearColor(0.12f,0.18f,0.23f); }
+    inline FLinearColor Navy() { return FLinearColor(0.12f,0.18f,0.25f); }
+    inline FLinearColor Steel() { return FLinearColor(0.34f,0.41f,0.48f); }
     inline FLinearColor Cyan() { return FLinearColor(0.025f,0.75f,0.95f); }
     inline FLinearColor Gold() { return FLinearColor(0.95f,0.48f,0.08f); }
     inline FLinearColor Red() { return FLinearColor(0.95f,0.075f,0.045f); }

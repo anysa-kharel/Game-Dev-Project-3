@@ -8,6 +8,7 @@
 #include "Engine/Font.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "Math/RotationMatrix.h"
 
 void ACACombatHUD::Label(const FString& Value,float X,float Y,float Size,const FLinearColor& Color)
 {
@@ -41,6 +42,16 @@ void ACACombatHUD::DrawHUD()
     Label(FString::Printf(TEXT("%02d:%02d / CHECKPOINT %d"),T/60,T%60,G->CheckpointIndex),
         W-260*S,68*S,14,CA::White());
 
+    Panel(28*S,132*S,830*S,68*S,CA::Gold());
+    Label(TEXT("ROUTE / GOLD ARROWS LEAD BETWEEN FLAGS"),46*S,141*S,12,CA::Gold());
+    Label(G->CheckpointIndex>=1 ? TEXT("FLAG 1: SAVED") : TEXT("FLAG 1: CHECKPOINT"),
+        46*S,169*S,13,G->CheckpointIndex>=1 ? CA::Mint() : CA::Cyan());
+    Label(TEXT("> CLOCK HAND >"),260*S,169*S,13,CA::Gold());
+    Label(G->CheckpointIndex>=2 ? TEXT("FLAG 2: SAVED") : TEXT("FLAG 2: CHECKPOINT"),
+        437*S,169*S,13,G->CheckpointIndex>=2 ? CA::Mint() : CA::Cyan());
+    Label(G->RemainingEnemies()==0 ? TEXT("> EXIT: OPEN") : TEXT("> EXIT: LOCKED"),
+        668*S,169*S,13,G->RemainingEnemies()==0 ? CA::Mint() : CA::Gold());
+
     Panel(28*S,H-125*S,330*S,94*S,CA::Mint());
     const float Health=static_cast<float>(G->PlayerHealth.Value);
     Label(FString::Printf(TEXT("HEALTH / %.0f"),Health),46*S,H-113*S,22,
@@ -60,14 +71,52 @@ void ACACombatHUD::DrawHUD()
         for (int32 X : {-1,1}) for (int32 Y : {-1,1})
             DrawLine(CX+X*12*S,CY+Y*12*S,CX+X*20*S,CY+Y*20*S,CA::Gold(),2*S);
 
-    FVector2D Point;
-    if (PlayerOwner && PlayerOwner->ProjectWorldLocationToScreen(G->Waypoint(),Point,true))
+    if (PlayerOwner)
     {
-        Point.X=FMath::Clamp<double>(Point.X,60.0*S,W-190.0*S);
-        Point.Y=FMath::Clamp<double>(Point.Y,155.0*S,H-200.0*S);
-        DrawRect(CA::Cyan(),Point.X-4*S,Point.Y-4*S,8*S,8*S);
-        Label(FString::Printf(TEXT("NEXT / %.0f m"),FVector::Dist(G->Waypoint(),G->PlayerPawn->GetActorLocation())/100),
-            Point.X+14*S,Point.Y-8*S,12,CA::Cyan());
+        const FVector Target=G->Waypoint();
+        FVector2D Point;
+        const float Left=55*S,Right=W-55*S,Top=285*S,Bottom=H-260*S;
+        const bool Projected=PlayerOwner->ProjectWorldLocationToScreen(Target,Point,true);
+        const bool InView=Projected && Point.X>=Left && Point.X<=Right && Point.Y>=Top && Point.Y<=Bottom;
+        bool TurnBack=false;
+        const FLinearColor Color=G->GuidanceStage()==Wayfinding::Stage::Exit ? CA::Mint() : CA::Cyan();
+        if (!InView)
+        {
+            FVector View; FRotator Rotation;
+            PlayerOwner->GetPlayerViewPoint(View,Rotation);
+            const FVector Delta=Target-View;
+            const FRotationMatrix Axes(FRotator(0,Rotation.Yaw,0));
+            const auto Direction=Wayfinding::Bearing(
+                FVector::DotProduct(Delta,Axes.GetUnitAxis(EAxis::X)),
+                FVector::DotProduct(Delta,Axes.GetUnitAxis(EAxis::Y)));
+            TurnBack=Direction.TurnBack;
+            const FVector2D CenterPoint((Left+Right)*0.5f,(Top+Bottom)*0.5f);
+            const double HalfW=(Right-Left)*0.5,HalfH=(Bottom-Top)*0.5;
+            const double Scale=FMath::Min(HalfW/FMath::Max(0.001,std::abs(Direction.X)),
+                HalfH/FMath::Max(0.001,std::abs(Direction.Y)));
+            Point=CenterPoint+FVector2D(Direction.X,Direction.Y)*Scale;
+            const FVector2D D(Direction.X,Direction.Y),Perp(-Direction.Y,Direction.X);
+            const FVector2D A=Point-D*15*S+Perp*7*S,B=Point-D*15*S-Perp*7*S;
+            DrawLine(A.X,A.Y,Point.X,Point.Y,Color,3*S);
+            DrawLine(B.X,B.Y,Point.X,Point.Y,Color,3*S);
+        }
+        else
+        {
+            DrawLine(Point.X,Point.Y-8*S,Point.X+8*S,Point.Y,Color,2*S);
+            DrawLine(Point.X+8*S,Point.Y,Point.X,Point.Y+8*S,Color,2*S);
+            DrawLine(Point.X,Point.Y+8*S,Point.X-8*S,Point.Y,Color,2*S);
+            DrawLine(Point.X-8*S,Point.Y,Point.X,Point.Y-8*S,Color,2*S);
+        }
+        const float LabelX=FMath::Clamp<float>(Point.X-125*S,35*S,W-300*S);
+        const FString Caption=(TurnBack ? TEXT("TURN BACK / ") : TEXT("NEXT / "))+G->WaypointLabel();
+        float TextW=0,TextH=0;
+        GetTextSize(Caption,TextW,TextH,GEngine->GetMediumFont(),12.0f/16*S);
+        const float CaptionSize=FMath::Min(12.0f,12.0f*(248*S)/FMath::Max(TextW,1.0f));
+        // Keep the card above the marker so it does not cover a targeted robot.
+        Panel(LabelX,Point.Y-63*S,270*S,48*S,Color);
+        Label(Caption,LabelX+10*S,Point.Y-57*S,CaptionSize,Color);
+        Label(FString::Printf(TEXT("%.0f m"),FVector::Dist(Target,G->PlayerPawn->GetActorLocation())/100),
+            LabelX+10*S,Point.Y-35*S,11,CA::White());
     }
     for (const ACAEnemy* Enemy : G->Enemies)
     {
@@ -88,8 +137,10 @@ void ACACombatHUD::DrawHUD()
     {
         const bool Near=CombatRules::AtDock(G->Clock->Angle(),false);
         const bool Far=CombatRules::AtDock(G->Clock->Angle(),true);
-        Center(Near ? TEXT("CLOCK HAND / BOARD AT THE 9 DOCK") : Far
-            ? TEXT("CLOCK HAND / STEP OFF AT THE 3 DOCK") : TEXT("CLOCK HAND IN TRANSIT / STAY ABOARD"),
+        const bool Returning=G->GuidanceStage()==Wayfinding::Stage::ReturnToYard;
+        Center(Near ? (Returning ? TEXT("STEP OFF AT 9 / FINISH THE YARD") : TEXT("BOARD THE HAND AT 9 / RIDE TO FLAG 2")) : Far
+            ? (Returning ? TEXT("BOARD AT 3 / RIDE BACK TO THE YARD") : TEXT("STEP OFF AT 3 / WALK THROUGH FLAG 2"))
+            : TEXT("CLOCK HAND IN TRANSIT / STAY ABOARD"),
             H-240*S,16,CA::Gold());
     }
     if (G->DamageFlash>0)
@@ -101,7 +152,7 @@ void ACACombatHUD::DrawHUD()
     if (G->bHelp)
     {
         const float X=W-525*S,Y=160*S;
-        Panel(X,Y,490*S,320*S,CA::Gold());
+        Panel(X,Y,490*S,380*S,CA::Gold());
         Label(TEXT("FIELD GUIDE"),X+18*S,Y+18*S,23,CA::Gold());
         const TCHAR* Lines[]={
             TEXT("Your template's shooting controls are unchanged."),
@@ -112,8 +163,10 @@ void ACACombatHUD::DrawHUD()
             TEXT("Their eyes turn gold before an attack."),
             TEXT("Crates and walls stop incoming projectiles."),
             TEXT("Hide for 6 seconds to begin healing."),
-            TEXT("Board the GOLD hand at 9. Ride to the 3 dock."),
-            TEXT("Clear both areas, then reach extraction."),
+            TEXT("Follow GOLD arrows. Walk through FLAG 1."),
+            TEXT("Ride the GOLD hand from 9 to FLAG 2 at 3."),
+            TEXT("Flags turn GREEN when your checkpoint saves."),
+            TEXT("Clear all robots, then reach the GREEN EXIT."),
             TEXT("P pause / BACKSPACE retry / F1 close guide")
         };
         float YLine=Y+65*S;

@@ -10,7 +10,7 @@ if not exist "%CA_UE_ROOT%\Engine\Build\BatchFiles\Build.bat" (
 )
 call "%CA_UE_ROOT%\Engine\Build\BatchFiles\Build.bat" ShootingEditor Win64 Development "%CA_PROJECT_DIR%Shooting.uproject" -waitmutex -MaxParallelActions=2
 if errorlevel 1 (
-    echo Build failed. Install the C++ game-development workload for Visual Studio.
+    echo Build failed. Check the FIRST compiler or SDK error in the output above.
     pause
     exit /b 1
 )

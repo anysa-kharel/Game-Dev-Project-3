@@ -8,6 +8,7 @@ class UBoxComponent;
 class USphereComponent;
 class UPrimitiveComponent;
 class UProjectileMovementComponent;
+class UTextRenderComponent;
 
 UCLASS(Blueprintable)
 class SHOOTINGEXPANSION_API ACAScenery : public AActor
@@ -56,12 +57,23 @@ class SHOOTINGEXPANSION_API ACAZone : public AActor
 public:
     ACAZone();
     virtual void OnConstruction(const FTransform& Transform) override;
+    virtual void BeginPlay() override;
+    virtual void Tick(float DeltaSeconds) override;
+    UFUNCTION(BlueprintCallable,CallInEditor,Category="Zone") void RefreshMarker();
     UPROPERTY(VisibleAnywhere) TObjectPtr<UBoxComponent> Trigger;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Beacon;
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> FlagPole;
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Flag;
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> FlagCap;
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UTextRenderComponent> FlagFront;
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UTextRenderComponent> FlagBack;
     UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Zone") ECAZoneKind Kind=ECAZoneKind::Checkpoint;
     UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Zone") int32 CheckpointIndex=1;
     UFUNCTION() void Enter(UPrimitiveComponent* Component,AActor* OtherActor,
         UPrimitiveComponent* OtherComp,int32 OtherBodyIndex,bool bFromSweep,const FHitResult& Hit);
+private:
+    int32 LastMarkerState=-1;
+    void UpdateMarker();
 };
 
 UCLASS()

@@ -58,3 +58,11 @@ Primary API references consulted:
 - Epic, `AActor::TakeDamage`: https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Engine/AActor/TakeDamage
 - Epic, UE 5.8 `ACharacter::SetBase` overloads: https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Engine/ACharacter/SetBase
 - Epic, `UWorld` actor-spawn delegates: https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Engine/UWorld
+
+
+## November 5 lighting and checkpoint update
+
+See LIGHTING_AND_CHECKPOINTS.md for the current 1.2.0 changes and checks. This
+revision is based on the latest uploaded Shooting.zip. All 217 original non-Python
+Content files and DefaultInput.ini were compared with that ZIP and preserved
+byte for byte. The saved map receives its visual upgrade inside Unreal.

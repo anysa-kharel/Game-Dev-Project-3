@@ -1,5 +1,6 @@
 #include "CAUtil.h"
 #include "CACombatGameMode.h"
+#include "WayfindingRules.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
@@ -22,19 +23,24 @@ void CA::Mesh(UStaticMeshComponent* Component,const TCHAR* Shape,const FVector& 
 void CA::Tint(UStaticMeshComponent* Component,const FLinearColor& Color,float Glow)
 {
     UMaterialInterface* Material=LoadObject<UMaterialInterface>(nullptr,
+        TEXT("/Game/ClockArena/Materials/M_ArenaDaylight.M_ArenaDaylight"),nullptr,LOAD_NoWarn|LOAD_Quiet);
+    const bool DaylightMaterial=Material!=nullptr;
+    if (!Material) Material=LoadObject<UMaterialInterface>(nullptr,
         TEXT("/Game/ClockArena/Materials/M_Arena.M_Arena"));
     if (!Material) Material=LoadObject<UMaterialInterface>(nullptr,
         TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
     if (!Material) return;
     Component->SetMaterial(0,Material);
     const FVector4 Value(Color.R,Color.G,Color.B,Color.A);
+    // Keep the same ambient floor if preparation has not yet created the new material.
+    const float VisibleGlow=Glow+(DaylightMaterial ? 0.0f : Wayfinding::AmbientLift);
     if (!Component->GetWorld() || !Component->GetWorld()->IsGameWorld())
     {
         Component->SetDefaultCustomPrimitiveDataVector4(0,Value);
-        Component->SetDefaultCustomPrimitiveDataFloat(4,Glow);
+        Component->SetDefaultCustomPrimitiveDataFloat(4,VisibleGlow);
     }
     Component->SetCustomPrimitiveDataVector4(0,Value);
-    Component->SetCustomPrimitiveDataFloat(4,Glow);
+    Component->SetCustomPrimitiveDataFloat(4,VisibleGlow);
 }
 void CA::Sound(UWorld* World,const TCHAR* Name,const FVector& Location,float Volume)
 {

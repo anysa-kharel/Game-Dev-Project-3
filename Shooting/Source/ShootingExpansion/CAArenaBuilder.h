@@ -11,6 +11,8 @@ public:
     ACAArenaBuilder();
     UPROPERTY(VisibleAnywhere,BlueprintReadOnly,Category="Arena") bool bBuilt=false;
     UFUNCTION(BlueprintCallable,CallInEditor,Category="Arena") void BuildArena();
+    // Refresh the saved map without replacing its layout or gameplay actors.
+    UFUNCTION(BlueprintCallable,CallInEditor,Category="Arena") void RefreshPresentation();
 private:
     void Block(const FVector& Location,const FVector& Size,const FLinearColor& Color,
         bool Solid=true,float Glow=0,const FRotator& Rotation=FRotator::ZeroRotator,
