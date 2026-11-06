@@ -2,11 +2,12 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "CombatRules.h"
+#include "CampaignRules.h"
 #include "CAEnemy.generated.h"
 class UStaticMeshComponent;
 
 UENUM(BlueprintType)
-enum class ECAEnemyKind : uint8 { Guard, Scout, Sentry };
+enum class ECAEnemyKind : uint8 { Guard, Scout, Sentry, Skirmisher, ShieldGuard, Bomber, Warden };
 
 UCLASS(Blueprintable)
 class SHOOTINGEXPANSION_API ACAEnemy : public ACharacter
@@ -25,8 +26,12 @@ public:
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Gun;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> LeftLeg;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> RightLeg;
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Shield;
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Detail;
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> DangerRing;
     UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Enemy") ECAEnemyKind Kind=ECAEnemyKind::Guard;
     UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Enemy") int32 Section=1;
+    UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Enemy") int32 Wave=0;
     UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Enemy") int32 MaxHits=3;
     UPROPERTY(VisibleAnywhere,BlueprintReadOnly,Category="Enemy") int32 HitsLeft=3;
     UPROPERTY(VisibleAnywhere,BlueprintReadOnly,Category="Enemy") bool bDead=false;
@@ -37,6 +42,11 @@ public:
     float AnimationAge=0;
     float HitFlash=0;
     CombatRules::Attack AttackState;
+    Campaign::Charge TacticalAttack;
+    int32 ShieldHits=2;
+    bool bDormant=false;
+    FString TypeName() const;
+    FLinearColor TypeColor() const;
     bool SeesPlayer() const;
     void WalkToward(const FVector& Goal,float Scale=1);
     void Fire();

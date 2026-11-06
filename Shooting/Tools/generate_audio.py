@@ -1,4 +1,4 @@
-"""Recreate the seven original, deterministic PCM effects shipped with this game."""
+"""Recreate this project's deterministic PCM effects, including the squad alert."""
 from pathlib import Path
 import math
 import random
@@ -37,7 +37,26 @@ def main():
     effect("S_PlayerHit", 0.20, 180, 65, noise=0.15)
     effect("S_Checkpoint", 0.65, 440, 880, harmony=1.25)
     effect("S_Win", 1.20, 440, 1100, harmony=1.25)
-    print("Generated 7 original PCM sound effects.")
+    wave_alert()
+    print("Generated 8 original PCM sound effects.")
+
+
+def wave_alert():
+    """Two short alarm pulses distinguish incoming squads from checkpoint saves."""
+    ROOT.mkdir(parents=True, exist_ok=True)
+    frames = bytearray()
+    for i in range(int(RATE * 0.6)):
+        t = i / RATE
+        local = t % 0.3
+        envelope = max(0.0, math.sin(math.pi * local / 0.22)) if local < 0.22 else 0.0
+        frequency = 540 if t < 0.3 else 720
+        value = 0.35 * envelope * math.sin(2 * math.pi * frequency * t)
+        frames.extend(struct.pack("<h", int(value * 32767)))
+    with wave.open(str(ROOT / "S_WaveAlert.wav"), "wb") as output:
+        output.setnchannels(1)
+        output.setsampwidth(2)
+        output.setframerate(RATE)
+        output.writeframes(frames)
 
 
 if __name__ == "__main__":

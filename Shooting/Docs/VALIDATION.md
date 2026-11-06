@@ -66,3 +66,11 @@ See LIGHTING_AND_CHECKPOINTS.md for the current 1.2.0 changes and checks. This
 revision is based on the latest uploaded Shooting.zip. All 217 original non-Python
 Content files and DefaultInput.ini were compared with that ZIP and preserved
 byte for byte. The saved map receives its visual upgrade inside Unreal.
+
+
+## Current campaign update 1.3.1
+
+See CAMPAIGN_PLAYTEST.md for the expanded map and current checks. The upload
+was the two-area 1.2.0 project; this version adds the separate five-area campaign,
+retaining original map/art/input data. Standard C++ checks: 4,122 pass. Editor
+setup regressions: 13 pass. Native Unreal build and timed playtest remain local.

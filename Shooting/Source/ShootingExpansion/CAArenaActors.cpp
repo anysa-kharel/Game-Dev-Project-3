@@ -3,6 +3,7 @@
 #include "CAUtil.h"
 #include "CombatRules.h"
 #include "WayfindingRules.h"
+#include "CampaignRules.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SphereComponent.h"
@@ -23,6 +24,7 @@ void ACAScenery::OnConstruction(const FTransform& Transform)
 {
     Super::OnConstruction(Transform);
     CA::Mesh(Mesh,*Shape,Dimensions,Color,Glow,bSolid);
+    Mesh->SetCullDistance(15000);
 }
 
 ACAClockBridge::ACAClockBridge()
@@ -80,7 +82,13 @@ void ACAClockBridge::Tick(float DeltaSeconds)
     Super::Tick(DeltaSeconds);
     const ACACombatGameMode* G=CA::Game(GetWorld());
     if (!G || !G->IsActive() || !G->PlayerPawn) return;
-    if (G->PlayerPawn->GetActorLocation().X>2550) bStarted=true;
+    if (SectionBefore>0)
+    {
+        const FVector P=G->PlayerPawn->GetActorLocation()-GetActorLocation();
+        if (Campaign::Boarded(P.X,P.Y,P.Z,HandWidth) && G->RemainingInSection(SectionBefore)==0
+            && G->CheckpointIndex>=SectionBefore*2-1) bStarted=true;
+    }
+    else if (G->PlayerPawn->GetActorLocation().X>2550) bStarted=true;
     if (bStarted) Age+=DeltaSeconds;
     Pivot->SetRelativeRotation(FRotator(0,Angle(),0));
 }
@@ -180,6 +188,7 @@ ACAExitDoor::ACAExitDoor()
     Root=CreateDefaultSubobject<USceneComponent>(TEXT("Root")); SetRootComponent(Root);
     Panel=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ExitDoor")); Panel->SetupAttachment(Root);
     Light=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DoorLight")); Light->SetupAttachment(Root);
+    Status=CreateDefaultSubobject<UTextRenderComponent>(TEXT("GateStatus")); Status->SetupAttachment(Root);
 }
 void ACAExitDoor::OnConstruction(const FTransform& Transform)
 {
@@ -188,16 +197,23 @@ void ACAExitDoor::OnConstruction(const FTransform& Transform)
     Panel->SetRelativeLocation(FVector(0,0,155));
     CA::Mesh(Light,TEXT("Cube"),FVector(70,1100,25),CA::Red(),2,false);
     Light->SetRelativeLocation(FVector(0,0,345));
+    Status->SetRelativeLocation(FVector(-40,0,430));Status->SetRelativeRotation(FRotator(0,180,0));
+    Status->SetHorizontalAlignment(EHTA_Center);Status->SetWorldSize(30);
+    Status->SetTextRenderColor(FColor::White);
+    Status->SetText(FText::FromString(RequiredSection>0 ? TEXT("CLEAR BOTH WAVES") : TEXT("FINAL EXTRACTION")));
 }
 void ACAExitDoor::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
     const ACACombatGameMode* G=CA::Game(GetWorld());
-    if (!G || !G->IsActive() || G->RemainingEnemies()>0) return;
+    if (!G || !G->IsActive()) return;
+    const int32 Remaining=RequiredSection>0 ? G->RemainingInSection(RequiredSection) : G->RemainingEnemies();
+    if (Remaining>0) return;
     Panel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     Open=FMath::Min(1.0f,Open+DeltaSeconds);
     Panel->SetRelativeLocation(FVector(0,0,155+350*Open));
     CA::Tint(Light,CA::Mint(),2);
+    Status->SetText(FText::FromString(RequiredSection>0 ? TEXT("CLOCK BRIDGE OPEN") : TEXT("EXIT OPEN")));
 }
 
 ACABolt::ACABolt()
@@ -227,9 +243,12 @@ void ACABolt::BeginPlay()
 void ACABolt::Impact(UPrimitiveComponent* Component,AActor* OtherActor,
     UPrimitiveComponent* OtherComp,FVector NormalImpulse,const FHitResult& Hit)
 {
-    if (OtherActor==GetOwner()) return;
+    if (OtherActor==GetOwner() || bSpent) return;
+    bSpent=true;
+    Collision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    Movement->StopMovementImmediately();Visual->SetVisibility(false);
     if (ACACombatGameMode* G=CA::Game(GetWorld()))
         if (G->IsActive() && OtherActor==G->PlayerPawn)
-            UGameplayStatics::ApplyDamage(OtherActor,12,GetInstigatorController(),this,nullptr);
-    Destroy();
+            UGameplayStatics::ApplyDamage(OtherActor,Damage,GetInstigatorController(),this,nullptr);
+    SetLifeSpan(0.05f);
 }

@@ -7,8 +7,12 @@ _arena_handle = None
 
 def _arena_first_tick(_delta):
     global _arena_handle
+    if _arena_handle is None:
+        return
     if unreal.AssetRegistryHelpers.get_asset_registry().is_loading_assets():
         return
+    if unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_game_world() is not None:
+        return  # Keep the callback pending until Play/Simulate has stopped.
     if _arena_handle is not None:
         unreal.unregister_slate_post_tick_callback(_arena_handle)
         _arena_handle = None

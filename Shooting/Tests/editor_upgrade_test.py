@@ -14,13 +14,13 @@ class SavedMapUpgrade(unittest.TestCase):
     def setUp(self):
         self.builder = SimpleNamespace(
             get_class=lambda: SimpleNamespace(get_path_name=lambda: "/Script/ShootingExpansion.CAArenaBuilder"),
-            refresh_presentation=Mock(), build_arena=Mock(), set_actor_label=Mock(),
+            refresh_presentation=Mock(), build_campaign=Mock(), set_actor_label=Mock(),
         )
         self.levels = SimpleNamespace(load_level=Mock(return_value=True), new_level=Mock(return_value=True),
                                       save_current_level=Mock(return_value=True))
         self.actors = SimpleNamespace(get_all_level_actors=Mock(return_value=[self.builder]),
                                       spawn_actor_from_class=Mock(return_value=self.builder))
-        self.editor = SimpleNamespace(get_editor_world=lambda: SimpleNamespace(get_name=lambda: "L_ClockArena"),
+        self.editor = SimpleNamespace(get_editor_world=lambda: SimpleNamespace(get_name=lambda: "L_ClockCampaign"),get_game_world=lambda: None,
                                       set_level_viewport_camera_info=Mock())
         self.unreal = SimpleNamespace(
             LevelEditorSubsystem="levels", EditorActorSubsystem="actors", UnrealEditorSubsystem="editor",
@@ -44,7 +44,7 @@ class SavedMapUpgrade(unittest.TestCase):
     def test_saved_map_gets_refreshed_and_saved_without_rebuild(self):
         self.assertFalse(self.module._map())
         self.builder.refresh_presentation.assert_called_once()
-        self.builder.build_arena.assert_not_called()
+        self.builder.build_campaign.assert_not_called()
         self.levels.new_level.assert_not_called()
         self.levels.save_current_level.assert_called_once()
 
@@ -52,7 +52,7 @@ class SavedMapUpgrade(unittest.TestCase):
         self.module._map()
         self.module._map()
         self.assertEqual(self.builder.refresh_presentation.call_count,2)
-        self.builder.build_arena.assert_not_called()
+        self.builder.build_campaign.assert_not_called()
         self.actors.spawn_actor_from_class.assert_not_called()
 
     def test_another_open_level_is_replaced_by_the_saved_arena(self):
@@ -82,7 +82,7 @@ class SavedMapUpgrade(unittest.TestCase):
         self.unreal.EditorAssetLibrary.does_asset_exist.return_value=False
         self.assertTrue(self.module._map())
         self.levels.new_level.assert_called_once_with(self.module.MAP)
-        self.builder.build_arena.assert_called_once()
+        self.builder.build_campaign.assert_called_once()
         self.levels.save_current_level.assert_called_once()
 
     def test_failed_new_map_does_not_spawn_geometry(self):
@@ -90,6 +90,61 @@ class SavedMapUpgrade(unittest.TestCase):
         self.levels.new_level.return_value=False
         with self.assertRaises(RuntimeError): self.module._map()
         self.actors.spawn_actor_from_class.assert_not_called()
+
+    def test_preparation_refuses_to_edit_during_play(self):
+        self.editor.get_game_world=lambda: object()
+        with self.assertRaisesRegex(RuntimeError,"Stop Play"):
+            self.module.prepare()
+        self.levels.new_level.assert_not_called()
+        self.builder.refresh_presentation.assert_not_called()
+
+
+class StartupTiming(unittest.TestCase):
+    def setUp(self):
+        self.registry=SimpleNamespace(is_loading_assets=Mock(return_value=False))
+        self.editor=SimpleNamespace(get_game_world=Mock(return_value=None))
+        self.build=SimpleNamespace(prepare=Mock())
+        self.unreal=SimpleNamespace(
+            AssetRegistryHelpers=SimpleNamespace(get_asset_registry=lambda:self.registry),
+            UnrealEditorSubsystem="editor", get_editor_subsystem=lambda _:self.editor,
+            register_slate_post_tick_callback=Mock(return_value=123),
+            unregister_slate_post_tick_callback=Mock(),log_error=Mock(),
+        )
+        self.modules=patch.dict(sys.modules,{"unreal":self.unreal,"build_arena":self.build})
+        self.modules.start()
+        source=Path(__file__).resolve().parents[1]/"Content/Python/init_unreal.py"
+        spec=importlib.util.spec_from_file_location("startup_under_test",source)
+        self.module=importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.module)
+
+    def tearDown(self):self.modules.stop()
+
+    def test_asset_scan_keeps_preparation_pending(self):
+        self.registry.is_loading_assets.return_value=True
+        self.module._arena_first_tick(0.016)
+        self.unreal.unregister_slate_post_tick_callback.assert_not_called()
+        self.build.prepare.assert_not_called()
+
+    def test_play_session_defers_preparation_until_stopped(self):
+        self.editor.get_game_world.return_value=object()
+        self.module._arena_first_tick(0.016)
+        self.build.prepare.assert_not_called()
+        self.unreal.unregister_slate_post_tick_callback.assert_not_called()
+        self.editor.get_game_world.return_value=None
+        self.module._arena_first_tick(0.016)
+        self.build.prepare.assert_called_once()
+        self.unreal.unregister_slate_post_tick_callback.assert_called_once_with(123)
+
+    def test_success_runs_once(self):
+        self.module._arena_first_tick(0.016)
+        self.module._arena_first_tick(0.016)
+        self.build.prepare.assert_called_once()
+
+    def test_failure_reports_manual_retry(self):
+        self.build.prepare.side_effect=RuntimeError("test failure")
+        self.module._arena_first_tick(0.016)
+        self.unreal.log_error.assert_called_once()
+        self.assertIn("Execute Python Script",self.unreal.log_error.call_args[0][0])
 
 
 if __name__=="__main__": unittest.main(verbosity=1)

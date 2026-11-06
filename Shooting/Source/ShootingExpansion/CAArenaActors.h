@@ -41,6 +41,7 @@ public:
     UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Clock") float HandLength=1200;
     UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Clock") float HandWidth=260;
     UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Clock") float Period=28;
+    UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Clock") int32 SectionBefore=0;
     double Age=0;
     bool bStarted=false;
     float Angle() const;
@@ -87,6 +88,8 @@ public:
     UPROPERTY(VisibleAnywhere) TObjectPtr<USceneComponent> Root;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Panel;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Light;
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UTextRenderComponent> Status;
+    UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Gate") int32 RequiredSection=0;
     float Open=0;
 };
 
@@ -100,6 +103,8 @@ public:
     UPROPERTY(VisibleAnywhere) TObjectPtr<USphereComponent> Collision;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Visual;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UProjectileMovementComponent> Movement;
+    UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Combat") float Damage=12;
+    bool bSpent=false;
     UFUNCTION() void Impact(UPrimitiveComponent* Component,AActor* OtherActor,
         UPrimitiveComponent* OtherComp,FVector NormalImpulse,const FHitResult& Hit);
 };

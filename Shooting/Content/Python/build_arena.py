@@ -1,8 +1,8 @@
 """Create this project's native Unreal materials, sounds and editable map.
 
 Runs automatically on editor startup, or through Tools > Execute Python Script.
-Refreshes lighting and checkpoint markers in an existing map while keeping its
-layout. Python is used only in the editor, never by the packaged game.
+Creates the longer campaign in a separate map. Existing campaign layouts are
+refreshed; the original L_ClockArena map is retained. Python runs only in the editor.
 """
 from pathlib import Path
 import re
@@ -10,7 +10,7 @@ import unreal
 
 ASSET_ROOT = "/Game/ClockArena"
 MATERIAL = ASSET_ROOT + "/Materials/M_ArenaDaylight"
-MAP = "/Game/ClockArena/Maps/L_ClockArena"
+MAP = "/Game/ClockArena/Maps/L_ClockCampaign"
 
 
 def _project_dir():
@@ -88,7 +88,7 @@ def _sounds():
 def _set_default_maps():
     ini = _project_dir() / "Config" / "DefaultEngine.ini"
     original = ini.read_text(encoding="utf-8")
-    value = MAP + ".L_ClockArena"
+    value = MAP + "." + MAP.rsplit("/", 1)[-1]
     updated = re.sub(r"(?m)^EditorStartupMap=.*$", "EditorStartupMap=" + value, original)
     updated = re.sub(r"(?m)^GameDefaultMap=.*$", "GameDefaultMap=" + value, updated)
     if updated != original:
@@ -100,7 +100,7 @@ def _map():
     actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
     if unreal.EditorAssetLibrary.does_asset_exist(MAP):
         world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
-        if world is None or world.get_name() != "L_ClockArena":
+        if world is None or world.get_name() != "L_ClockCampaign":
             if not levels.load_level(MAP):
                 raise RuntimeError("Could not open the saved Clock Arena map.")
         refreshed = 0
@@ -122,15 +122,15 @@ def _map():
     builder = actors.spawn_actor_from_class(builder_class, unreal.Vector(0, 0, 0))
     if builder is None:
         raise RuntimeError("Could not place the native level builder.")
-    builder.set_actor_label("CLOCK ARENA - Select to rebuild the expansion level")
-    builder.build_arena()
+    builder.set_actor_label("CITADEL RUN - Five-sector campaign builder")
+    builder.build_campaign()
     if not levels.save_current_level():
         raise RuntimeError("Could not save the generated map.")
     try:
         editor = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
         editor.set_level_viewport_camera_info(
-            unreal.Vector(4000, -7200, 4800),
-            unreal.Rotator(pitch=-28, yaw=85, roll=0)
+            unreal.Vector(-4200, -6200, 4200),
+            unreal.Rotator(pitch=-25, yaw=55, roll=0)
         )
     except Exception:
         pass  # Viewport positioning is cosmetic.
@@ -139,6 +139,8 @@ def _map():
 
 
 def prepare():
+    if unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_game_world() is not None:
+        raise RuntimeError("Stop Play or Simulate before preparing the campaign map.")
     for path in ["/Game/InfimaGames/FreeFPSTemplate/Core/BP_Character", "/Game/InfimaGames/FreeFPSTemplate/Core/BP_Bullet"]:
         if not unreal.EditorAssetLibrary.does_asset_exist(path):
             raise RuntimeError("The template is missing a required asset: " + path)
@@ -146,7 +148,7 @@ def prepare():
     _sounds()
     created = _map()
     unreal.log(
-        "CLOCK ARENA READY / DAYLIGHT + CHECKPOINT FLAGS. Press Play, then click the viewport to start."
+        "CLOCK CAMPAIGN READY / 5 SECTORS / 4 CLOCK BRIDGES / 60 ROBOTS. Press Play, then click the viewport."
         + (" Native map, material and sounds have been generated." if created else "")
     )
 

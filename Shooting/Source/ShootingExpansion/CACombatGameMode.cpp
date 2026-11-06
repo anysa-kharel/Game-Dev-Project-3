@@ -36,12 +36,17 @@ void ACACombatGameMode::BeginPlay()
     Super::BeginPlay();
     TActorIterator<ACAArenaBuilder> Existing(GetWorld());
     ACAArenaBuilder* Builder=Existing ? *Existing : nullptr;
+    bCampaign=Builder ? Builder->bCampaignLayout : true;
     if (!Builder) Builder=GetWorld()->SpawnActor<ACAArenaBuilder>();
-    if (Builder && !Builder->bBuilt) Builder->BuildArena();
+    if (Builder && !Builder->bBuilt)
+    {
+        if (bCampaign) Builder->BuildCampaign(); else Builder->BuildArena();
+    }
     else if (Builder) Builder->RefreshPresentation();
     for (TActorIterator<ACAEnemy> It(GetWorld());It;++It) Enemies.Add(*It);
     TActorIterator<ACAClockBridge> Bridges(GetWorld());
     Clock=Bridges ? *Bridges : nullptr;
+    for (TActorIterator<ACAClockBridge> It(GetWorld());It;++It) Clocks.Add(*It);
     TotalEnemies=Enemies.Num();
     BulletSpawnHandle=GetWorld()->AddOnActorSpawnedHandler(
         FOnActorSpawned::FDelegate::CreateUObject(this,&ACACombatGameMode::ActorSpawned));
@@ -67,7 +72,8 @@ void ACACombatGameMode::SetupPlayer()
     {
         Character->GetCharacterMovement()->bIgnoreBaseRotation=true;
         Character->GetCharacterMovement()->bImpartBaseAngularVelocity=false;
-        if (Clock) Character->GetCharacterMovement()->AddTickPrerequisiteActor(Clock);
+        for (ACAClockBridge* Bridge : Clocks)
+            if (IsValid(Bridge)) Character->GetCharacterMovement()->AddTickPrerequisiteActor(Bridge);
     }
     EnableInput(PC);
     if (InputComponent)
@@ -80,7 +86,8 @@ void ACACombatGameMode::SetupPlayer()
     PC->bShowMouseCursor=false;
     FInputModeGameOnly Mode; Mode.SetConsumeCaptureMouseDown(false); PC->SetInputMode(Mode);
     RestorePlayer();
-    Say(TEXT("CLEAR THE YARD, THEN FOLLOW GOLD ARROWS / FLAG 1 > CLOCK HAND > FLAG 2 > EXIT. F1: help."),8);
+    Say(bCampaign ? TEXT("CITADEL RUN / 5 SECTORS / 4 CLOCK BRIDGES / Clear each squad, then follow the flags. F1: guide.")
+        : TEXT("CLEAR THE YARD, THEN FOLLOW GOLD ARROWS / FLAG 1 > CLOCK HAND > FLAG 2 > EXIT. F1: help."),8);
 }
 void ACACombatGameMode::Tick(float DeltaSeconds)
 {
@@ -97,6 +104,7 @@ void ACACombatGameMode::Tick(float DeltaSeconds)
         return;
     }
     RunSeconds+=DeltaSeconds;
+    StepCampaign();
     PlayerHealth.Step(DeltaSeconds);
     if (PlayerPawn && PlayerPawn->GetActorLocation().Z<-700)
         PlayerDamaged(PlayerPawn,1000,nullptr,nullptr,nullptr);
@@ -125,15 +133,29 @@ void ACACombatGameMode::EnemyDefeated(ACAEnemy* Enemy)
 {
     if (!Enemy || !Enemies.Contains(Enemy)) return;
     ++Defeated;
+    if (bCampaign)
+    {
+        if (RemainingInSection(ActiveSection())==0)
+            Say(ActiveSection()==5 ? TEXT("WARDEN AND ALL SQUADS CLEARED / Follow the GREEN FINAL EXIT.")
+                : TEXT("BOTH WAVES CLEARED / The bridge gate is opening. Follow GOLD arrows to the next flag."),6);
+        return;
+    }
     if (RemainingEnemies()==0) Say(TEXT("ALL HOSTILES CLEARED / Follow the EXIT marker to the GREEN exit flag."),6);
     else if (RemainingInSection(1)==0 && CheckpointIndex<2)
         Say(TEXT("YARD CLEARED / Follow GOLD floor arrows to FLAG 1, then board the gold clock hand."),6);
 }
 void ACACombatGameMode::SaveCheckpoint(int32 Index)
 {
-    if (!IsActive() || Index<=CheckpointIndex || Index>2) return;
-    CheckpointIndex=Index; PlayerHealth.Reset();
+    if (!IsActive() || Index<=CheckpointIndex || Index>(bCampaign ? Campaign::Checkpoints : 2)) return;
+    if (bCampaign && !Campaign::CanSave(CheckpointIndex,Index,RemainingInSection(ActiveSection()))) return;
+    CheckpointIndex=Index; PlayerHealth.Reset(); RefillMagazine();
     CA::Sound(GetWorld(),TEXT("S_Checkpoint"),PlayerPawn->GetActorLocation(),0.6f);
+    if (bCampaign)
+    {
+        Say(FString::Printf(TEXT("FLAG %d SAVED / Health and magazine restored. %s"),Index,
+            Index%2 ? TEXT("Wait for the GOLD hand, then ride from 9 to 3.") : TEXT("Next sector ahead. Watch the new enemy silhouettes.")),6);
+        return;
+    }
     Say(Index==1 ? TEXT("FLAG 1 SAVED / Your flag is GREEN. Board the GOLD hand at 9, then ride to FLAG 2.")
         : TEXT("FLAG 2 SAVED / Clear the remaining robots, then follow the GREEN EXIT flag."),7);
 }
@@ -163,6 +185,7 @@ void ACACombatGameMode::RestorePlayer()
     FVector Location(-2150,0,110);
     if (CheckpointIndex==1) Location=FVector(2850,0,110);
     if (CheckpointIndex==2) Location=FVector(5800,0,110);
+    if (bCampaign) Location=FVector(CheckpointIndex>0 ? Campaign::FlagX(CheckpointIndex) : Campaign::StartX,0,110);
     if (ACharacter* Character=Cast<ACharacter>(PlayerPawn))
     {
         Character->SetBase(static_cast<FMovementBaseInterfaceData*>(nullptr),NAME_None,true);
@@ -173,7 +196,10 @@ void ACACombatGameMode::RestorePlayer()
     APlayerController* PC=UGameplayStatics::GetPlayerController(GetWorld(),0);
     if (PC) { PC->SetControlRotation(FRotator::ZeroRotator); PlayerPawn->EnableInput(PC); }
     RefillMagazine();
-    if (Clock && CheckpointIndex==1) Clock->ResetClock();
+    if (!bCampaign && Clock && CheckpointIndex==1) Clock->ResetClock();
+    if (bCampaign && CheckpointIndex%2)
+        for (ACAClockBridge* Bridge : Clocks)
+            if (IsValid(Bridge) && Bridge->SectionBefore==ActiveSection()) Bridge->ResetClock();
     for (ACAEnemy* Enemy : Enemies)
         if (IsValid(Enemy) && !Enemy->bDead) Enemy->ResetGuard();
     for (TActorIterator<ACABolt> It(GetWorld());It;++It) It->Destroy();
@@ -219,7 +245,7 @@ void ACACombatGameMode::ToggleHelp() { bHelp=!bHelp; }
 void ACACombatGameMode::TryWin()
 {
     if (!IsActive()) return;
-    if (RemainingEnemies()>0 || TotalEnemies==0)
+    if (RemainingEnemies()>0 || TotalEnemies==0 || (bCampaign && CheckpointIndex<Campaign::Checkpoints))
     {
         Say(TEXT("Clear the remaining robots first. The NEXT marker points toward your objective."),5); return;
     }
@@ -230,11 +256,13 @@ void ACACombatGameMode::TryWin()
 void ACACombatGameMode::Say(const FString& Text,float Duration) { Message=Text; MessageTime=Duration; }
 Wayfinding::Stage ACACombatGameMode::GuidanceStage() const
 {
+    if (bCampaign) return RemainingEnemies()==0 ? Wayfinding::Stage::Exit : Wayfinding::Stage::ClearFoundry;
     return Wayfinding::NextStage(CheckpointIndex,RemainingInSection(1),RemainingInSection(2),
         PlayerPawn ? PlayerPawn->GetActorLocation().X : -2150);
 }
 FString ACACombatGameMode::Objective() const
 {
+    if (bCampaign) return CampaignObjective();
     switch (GuidanceStage())
     {
     case Wayfinding::Stage::ClearYard: return TEXT("CLEAR THE YARD / THEN REACH FLAG 1");
@@ -249,6 +277,7 @@ FString ACACombatGameMode::Objective() const
 }
 FString ACACombatGameMode::WaypointLabel() const
 {
+    if (bCampaign) return CampaignWaypointLabel();
     switch (GuidanceStage())
     {
     case Wayfinding::Stage::ClearYard: return TEXT("YARD ROBOT");
@@ -265,6 +294,7 @@ FString ACACombatGameMode::WaypointLabel() const
 }
 FVector ACACombatGameMode::Waypoint() const
 {
+    if (bCampaign) return CampaignWaypoint();
     auto FlagLocation=[this](int32 Index,bool IsExit,const FVector& Fallback)
     {
         for (TActorIterator<ACAZone> It(GetWorld());It;++It)

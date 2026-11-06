@@ -10,7 +10,9 @@ class SHOOTINGEXPANSION_API ACAArenaBuilder : public AActor
 public:
     ACAArenaBuilder();
     UPROPERTY(VisibleAnywhere,BlueprintReadOnly,Category="Arena") bool bBuilt=false;
+    UPROPERTY(VisibleAnywhere,BlueprintReadOnly,Category="Arena") bool bCampaignLayout=false;
     UFUNCTION(BlueprintCallable,CallInEditor,Category="Arena") void BuildArena();
+    UFUNCTION(BlueprintCallable,CallInEditor,Category="Arena") void BuildCampaign();
     // Refresh the saved map without replacing its layout or gameplay actors.
     UFUNCTION(BlueprintCallable,CallInEditor,Category="Arena") void RefreshPresentation();
 private:

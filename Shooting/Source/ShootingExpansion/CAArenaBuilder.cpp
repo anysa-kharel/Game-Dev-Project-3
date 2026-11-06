@@ -4,6 +4,7 @@
 #include "CAUtil.h"
 #include "ArenaLayout.h"
 #include "WayfindingRules.h"
+#include "CampaignRules.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/LightComponent.h"
 #include "Components/SceneComponent.h"
@@ -113,6 +114,8 @@ void ACAArenaBuilder::Checkpoint(float X,int32 Index)
 void ACAArenaBuilder::BuildArena()
 {
     if (!GetWorld()) return;
+    if (bCampaignLayout) { BuildCampaign(); return; }
+    bCampaignLayout=false;
     TArray<AActor*> Previous;
     for (TActorIterator<AActor> It(GetWorld());It;++It)
         if (It->Tags.Contains(TEXT("CAExpansion"))) Previous.Add(*It);
@@ -324,7 +327,26 @@ void ACAArenaBuilder::RefreshPresentation()
     }
     // This owns only the new decorative arrows. Gameplay actors and map edits stay put.
     for (ACAScenery* Arrow : OldArrows) Arrow->Destroy();
-    for (const auto& Arrow : Wayfinding::Arrows)
+    TArray<Wayfinding::Arrow> Route;
+    if (bCampaignLayout)
+    {
+        for (int32 Sector=0;Sector<Campaign::Sectors;++Sector)
+        {
+            for (const auto& Arrow : Wayfinding::Arrows)
+            {
+                if (Arrow.X>3000) continue;
+                Wayfinding::Arrow Copy=Arrow; Copy.X+=Sector*Campaign::Spacing;
+                // The gearworks machine occupies the center lane.
+                if (Sector==2 && Arrow.X>=-600 && Arrow.X<=650) Copy.Y=-740;
+                Route.Add(Copy);
+            }
+            if (Sector<Campaign::Sectors-1)
+                for (double Offset : {3900.0,4500.0,5200.0,7750.0,8500.0})
+                    Route.Add({Sector*Campaign::Spacing+Offset,0,0});
+        }
+    }
+    else for (const auto& Arrow : Wayfinding::Arrows) Route.Add(Arrow);
+    for (const auto& Arrow : Route)
     {
         const FRotator Rotation(0,Arrow.Yaw,0);
         const FVector Origin(Arrow.X,Arrow.Y,6);

@@ -3,6 +3,7 @@
 #include "GameFramework/GameModeBase.h"
 #include "CombatRules.h"
 #include "WayfindingRules.h"
+#include "CampaignRules.h"
 #include "CACombatGameMode.generated.h"
 class ACAEnemy;
 class ACAClockBridge;
@@ -19,6 +20,7 @@ public:
     virtual void Tick(float DeltaSeconds) override;
     UPROPERTY() TObjectPtr<APawn> PlayerPawn;
     UPROPERTY() TObjectPtr<ACAClockBridge> Clock;
+    UPROPERTY() TArray<TObjectPtr<ACAClockBridge>> Clocks;
     UPROPERTY() TArray<TObjectPtr<ACAEnemy>> Enemies;
     UPROPERTY() TSubclassOf<AActor> TemplateBulletClass;
     CombatRules::Health PlayerHealth;
@@ -35,10 +37,19 @@ public:
     bool bPaused=false;
     bool bWon=false;
     bool bHelp=false;
+    bool bCampaign=false;
+    int32 AnnouncedSection=0,AnnouncedWave=-1;
     FString Message;
     bool IsActive() const { return bReady && !bPaused && !bWon && PlayerHealth.Alive(); }
     int32 RemainingEnemies() const;
     int32 RemainingInSection(int32 Section) const;
+    int32 ActiveSection() const;
+    int32 ActiveWave() const;
+    bool EnemyEnabled(const ACAEnemy* Enemy) const;
+    FString CampaignObjective() const;
+    FString CampaignWaypointLabel() const;
+    FVector CampaignWaypoint() const;
+    void StepCampaign();
     void EnemyDefeated(ACAEnemy* Enemy);
     void SaveCheckpoint(int32 Index);
     void RestorePlayer();
