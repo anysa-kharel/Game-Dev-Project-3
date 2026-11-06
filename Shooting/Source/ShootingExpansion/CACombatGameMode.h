@@ -90,12 +90,14 @@ private:
     void RestoreTemplateHUD();
     void StyleTemplateHUD();
     void UpdateMusic(float DeltaSeconds);
+    void UpdateReloadFeedback();
     void StopMusic();
     void ApplyPauseMusic();
     UPROPERTY(Transient) TObjectPtr<UAudioComponent> MenuMusic;
     UPROPERTY(Transient) TObjectPtr<UAudioComponent> GameMusic;
     PresentationAudio::Mix MusicMix;
     float MusicRetry=0,HUDThemeRetry=0;
+    bool bWasReloading=false;
     TArray<TWeakObjectPtr<UUserWidget>> ThemedWidgets;
     bool bPriorClickEvents=false,bPriorMouseOver=false;
     TArray<TWeakObjectPtr<UUserWidget>> IntroWidgets;

@@ -95,6 +95,7 @@ void ACACombatGameMode::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
     UpdateMusic(DeltaSeconds);
+    UpdateReloadFeedback();
     if (StartFlow.Running())
     {
         HUDThemeRetry-=DeltaSeconds;

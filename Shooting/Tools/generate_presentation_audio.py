@@ -1,4 +1,4 @@
-"""Recreate the original Tick Tock music and gate cue (requires NumPy/SciPy).
+"""Recreate Tick Tock music, gate cue and reload effect (requires NumPy/SciPy).
 
 The supplied WAVs are ready to import; running this generator is optional.
 No recordings, external samples, vocals, or third-party music are used.
@@ -59,6 +59,27 @@ def gate():
         v=pluck(f,min(.35,duration-start),.04);at=round(start*RATE);out[at:at+len(v)]+=v
     out[:320]*=np.linspace(0,1,320);out[-320:]*=np.linspace(1,0,320)
     return out
+def reload_sound():
+    """Magazine release, slide, insertion and bolt latch; no external samples."""
+    duration=1.42;t=np.arange(round(duration*RATE))/RATE;out=np.zeros(len(t))
+    local_rng=np.random.default_rng(48271)
+    noise=local_rng.normal(0,1,len(t))
+    metal=sosfilt(butter(3,[550,5500],fs=RATE,btype='bandpass',output='sos'),noise)
+    scrape=sosfilt(butter(3,[350,2600],fs=RATE,btype='bandpass',output='sos'),noise)
+    for start,amount,frequency,decay in ((.018,.22,1680,58),(.12,.10,820,42),
+                                        (.44,.07,1200,60),(.78,.28,270,26),
+                                        (1.03,.14,880,45),(1.20,.21,1400,54)):
+        q=np.maximum(0,t-start)
+        envelope=(t>=start)*(1-np.exp(-q*900))*np.exp(-q*decay)
+        out+=amount*envelope*(.65*metal+.5*np.sin(2*np.pi*frequency*q)
+                              +.18*np.sin(2*np.pi*frequency*1.71*q))
+    for start,length,amount in ((.14,.20,.07),(.57,.20,.055),(.91,.15,.085),(1.09,.10,.07)):
+        phase=np.clip((t-start)/length,0,1)
+        out+=amount*scrape*np.sin(np.pi*phase)**1.3
+    # Round transient peaks so the mechanical details are audible at modest gain.
+    out=np.tanh(out*16)
+    out[:160]*=np.linspace(0,1,160);out[-640:]*=np.linspace(1,0,640)
+    return out
 def save(name,samples,rms):
     samples=samples-np.mean(samples,axis=0)
     gain=min(rms/max(1e-9,np.sqrt(np.mean(samples*samples))),.62/max(1e-9,np.max(np.abs(samples))))
@@ -72,6 +93,7 @@ def save(name,samples,rms):
             'rms_dbfs':round(20*np.log10(np.sqrt(np.mean(samples*samples))),2),
             'boundary_step':float(np.max(np.abs(samples[-1]-samples[0])))}
 def main():
-    results=[save('S_MenuLoop',menu(),.16),save('S_GameAmbience',gameplay(),.12),save('S_GateOpen',gate(),.09)]
+    results=[save('S_MenuLoop',menu(),.16),save('S_GameAmbience',gameplay(),.12),
+             save('S_GateOpen',gate(),.09),save('S_Reload',reload_sound(),.14)]
     print(json.dumps(results,indent=2))
 if __name__=='__main__':main()

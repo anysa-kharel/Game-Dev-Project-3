@@ -12,7 +12,7 @@ ASSET_ROOT = "/Game/ClockArena"
 MATERIAL = ASSET_ROOT + "/Materials/M_ArenaDaylight"
 MAP = "/Game/ClockArena/Maps/L_ClockCampaign"
 SIGN_MATERIAL = ASSET_ROOT + "/Materials/M_SignSurface"
-PRESENTATION_AUDIO = {"S_MenuLoop": True, "S_GameAmbience": True, "S_GateOpen": False}
+PRESENTATION_AUDIO = {"S_MenuLoop": True, "S_GameAmbience": True, "S_GateOpen": False, "S_Reload": False}
 
 
 def _project_dir():
@@ -191,7 +191,7 @@ def prepare():
     _sounds()
     created = _map()
     unreal.log(
-        "TICK TOCK READY / AUDIO + GOLD UI / 5 SECTORS / 4 CLOCK BRIDGES / 60 ROBOTS. Press Play, then START or ENTER. M toggles music."
+        "TICK TOCK READY / AMMO LABEL + RELOAD AUDIO / 5 SECTORS / 4 CLOCK BRIDGES / 60 ROBOTS. Press Play, then START or ENTER. M toggles music."
         + (" Native map, material and sounds have been generated." if created else "")
     )
 

@@ -1,7 +1,27 @@
 #include "CACombatGameMode.h"
 #include "Components/AudioComponent.h"
+#include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundWave.h"
+#include "UObject/UnrealType.h"
+
+void ACACombatGameMode::UpdateReloadFeedback()
+{
+    // Observe the template's accepted reload, including its animation delay.
+    // No extra R binding: the template keeps control of input and ammunition.
+    const FBoolProperty* ReloadFlag=IsValid(PlayerPawn)
+        ? FindFProperty<FBoolProperty>(PlayerPawn->GetClass(),TEXT("bReloading")) : nullptr;
+    const bool bReloadingNow=ReloadFlag && ReloadFlag->GetPropertyValue_InContainer(PlayerPawn);
+    const bool bReloadStarted=bReloadingNow && !bWasReloading;
+    bWasReloading=bReloadingNow;
+    if (!IsActive() || !bReloadStarted) return;
+    USoundWave* ReloadSound=LoadObject<USoundWave>(nullptr,
+        TEXT("/Game/ClockArena/Audio/S_Reload.S_Reload"),nullptr,LOAD_NoWarn|LOAD_Quiet);
+    if (!ReloadSound) return;
+    DuckMusic(1.5f);
+    // First-person equipment sound; pauses with gameplay and is separate from music.
+    UGameplayStatics::PlaySound2D(this,ReloadSound,0.55f,1.0f,0.0f,nullptr,PlayerPawn,false);
+}
 
 void ACACombatGameMode::UpdateMusic(float DeltaSeconds)
 {
