@@ -11,6 +11,7 @@ import unreal
 ASSET_ROOT = "/Game/ClockArena"
 MATERIAL = ASSET_ROOT + "/Materials/M_ArenaDaylight"
 MAP = "/Game/ClockArena/Maps/L_ClockCampaign"
+SIGN_MATERIAL = ASSET_ROOT + "/Materials/M_SignSurface"
 
 
 def _project_dir():
@@ -63,6 +64,29 @@ def _material():
         raise RuntimeError("Could not save the shared material.")
 
 
+def _sign_material():
+    if unreal.EditorAssetLibrary.does_asset_exist(SIGN_MATERIAL):
+        return
+    mat = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
+        "M_SignSurface", ASSET_ROOT + "/Materials", unreal.Material, unreal.MaterialFactoryNew()
+    )
+    if mat is None:
+        raise RuntimeError("Could not create the readable-sign material.")
+    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    mat.set_editor_property("two_sided", True)
+    edit = unreal.MaterialEditingLibrary
+    tint = edit.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -250, 0)
+    tint.set_editor_property("parameter_name", "PanelTint")
+    tint.set_editor_property("default_value", unreal.LinearColor(0.006, 0.010, 0.018, 1.0))
+    tint.set_editor_property("use_custom_primitive_data", True)
+    tint.set_editor_property("primitive_data_index", 0)
+    if not edit.connect_material_property(tint, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR):
+        raise RuntimeError("Could not connect the readable-sign material.")
+    edit.recompile_material(mat)
+    if not unreal.EditorAssetLibrary.save_asset(SIGN_MATERIAL, only_if_is_dirty=False):
+        raise RuntimeError("Could not save the readable-sign material.")
+
+
 def _sounds():
     source = _project_dir() / "Tools" / "AudioSource"
     tasks = []
@@ -111,7 +135,7 @@ def _map():
         if not refreshed:
             raise RuntimeError("The saved arena has no CAArenaBuilder to refresh. Your existing map was preserved.")
         if not levels.save_current_level():
-            raise RuntimeError("Could not save the lighting and checkpoint upgrade.")
+            raise RuntimeError("Could not save the readable-sign upgrade.")
         _set_default_maps()
         return False
     builder_class = unreal.load_class(None, "/Script/ShootingExpansion.CAArenaBuilder")
@@ -145,10 +169,11 @@ def prepare():
         if not unreal.EditorAssetLibrary.does_asset_exist(path):
             raise RuntimeError("The template is missing a required asset: " + path)
     _material()
+    _sign_material()
     _sounds()
     created = _map()
     unreal.log(
-        "CLOCK CAMPAIGN READY / 5 SECTORS / 4 CLOCK BRIDGES / 60 ROBOTS. Press Play, then click the viewport."
+        "CLOCK CAMPAIGN READY / CONTROLS + READABLE SIGNS / 5 SECTORS / 4 CLOCK BRIDGES / 60 ROBOTS. Press Play, then START or ENTER."
         + (" Native map, material and sounds have been generated." if created else "")
     )
 

@@ -4,6 +4,7 @@
 #include "CombatRules.h"
 #include "WayfindingRules.h"
 #include "CampaignRules.h"
+#include "CAReadableSigns.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SphereComponent.h"
@@ -24,6 +25,7 @@ void ACAScenery::OnConstruction(const FTransform& Transform)
 {
     Super::OnConstruction(Transform);
     CA::Mesh(Mesh,*Shape,Dimensions,Color,Glow,bSolid);
+    if (Tags.Contains(TEXT("CAReadabilityPanel"))) CAReadability::Surface(Mesh,Color);
     Mesh->SetCullDistance(15000);
 }
 
@@ -105,6 +107,7 @@ ACAZone::ACAZone()
     Beacon=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Beacon")); Beacon->SetupAttachment(Trigger);
     FlagPole=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CheckpointFlagPole")); FlagPole->SetupAttachment(Trigger);
     Flag=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CheckpointFlag")); Flag->SetupAttachment(Trigger);
+    FlagStripe=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("FlagStatusStripe")); FlagStripe->SetupAttachment(Trigger);
     FlagCap=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("CheckpointFlagCap")); FlagCap->SetupAttachment(Trigger);
     FlagFront=CreateDefaultSubobject<UTextRenderComponent>(TEXT("FlagLabelFront")); FlagFront->SetupAttachment(Trigger);
     FlagBack=CreateDefaultSubobject<UTextRenderComponent>(TEXT("FlagLabelBack")); FlagBack->SetupAttachment(Trigger);
@@ -121,17 +124,20 @@ void ACAZone::RefreshMarker()
     Beacon->SetRelativeLocation(FVector(0,0,-196));
     CA::Mesh(FlagPole,TEXT("Cylinder"),FVector(12,12,Wayfinding::FlagHeight),CA::White(),0.1f,false);
     FlagPole->SetRelativeLocation(FVector(0,-340,Wayfinding::FlagHeight*0.5f-200));
-    CA::Mesh(Flag,TEXT("Cube"),FVector(16,300,180),Color,0.8f,false);
+    CA::Mesh(Flag,TEXT("Cube"),FVector(16,300,180),CAReadability::Ink(),0,false);
     Flag->SetRelativeLocation(FVector(0,-180,400));
+    CAReadability::Surface(Flag,CAReadability::Ink());
+    CA::Mesh(FlagStripe,TEXT("Cube"),FVector(22,12,180),Color,0,false);
+    FlagStripe->SetRelativeLocation(FVector(0,-324,400));
+    CAReadability::Surface(FlagStripe,Color);
     CA::Mesh(FlagCap,TEXT("Sphere"),FVector(25),Color,1.0f,false);
     FlagCap->SetRelativeLocation(FVector(0,-340,Wayfinding::FlagHeight-200));
     for (UTextRenderComponent* Text : {FlagFront.Get(),FlagBack.Get()})
     {
         Text->SetHorizontalAlignment(EHTA_Center);
         Text->SetVerticalAlignment(EVRTA_TextCenter);
-        Text->SetWorldSize(38);
-        Text->SetTextRenderColor(FColor::White);
-        Text->SetCastShadow(false);
+        Text->SetWorldSize(42);
+        CAReadability::Lettering(Text);
     }
     FlagFront->SetRelativeLocation(FVector(-10,-180,400));
     FlagFront->SetRelativeRotation(FRotator(0,180,0));
@@ -167,7 +173,8 @@ void ACAZone::UpdateMarker()
         : FString::Printf(TEXT("FLAG %d\n%s"),CheckpointIndex,Green ? TEXT("SAVED") : TEXT("CHECKPOINT"));
     FlagFront->SetText(FText::FromString(Label));
     FlagBack->SetText(FText::FromString(Label));
-    CA::Tint(Flag,Color,State==Wayfinding::FlagState::Next ? 1.1f : 0.8f);
+    CAReadability::Surface(Flag,CAReadability::Ink());
+    CAReadability::Surface(FlagStripe,Color);
     CA::Tint(FlagCap,Color,1.0f);
     CA::Tint(Beacon,Color,0.45f);
 }
@@ -189,6 +196,7 @@ ACAExitDoor::ACAExitDoor()
     Panel=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ExitDoor")); Panel->SetupAttachment(Root);
     Light=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DoorLight")); Light->SetupAttachment(Root);
     Status=CreateDefaultSubobject<UTextRenderComponent>(TEXT("GateStatus")); Status->SetupAttachment(Root);
+    StatusBoard=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("GateStatusBoard")); StatusBoard->SetupAttachment(Root);
 }
 void ACAExitDoor::OnConstruction(const FTransform& Transform)
 {
@@ -197,10 +205,17 @@ void ACAExitDoor::OnConstruction(const FTransform& Transform)
     Panel->SetRelativeLocation(FVector(0,0,155));
     CA::Mesh(Light,TEXT("Cube"),FVector(70,1100,25),CA::Red(),2,false);
     Light->SetRelativeLocation(FVector(0,0,345));
-    Status->SetRelativeLocation(FVector(-40,0,430));Status->SetRelativeRotation(FRotator(0,180,0));
-    Status->SetHorizontalAlignment(EHTA_Center);Status->SetWorldSize(30);
-    Status->SetTextRenderColor(FColor::White);
+    RefreshSign();
     Status->SetText(FText::FromString(RequiredSection>0 ? TEXT("CLEAR BOTH WAVES") : TEXT("FINAL EXTRACTION")));
+}
+void ACAExitDoor::RefreshSign()
+{
+    CA::Mesh(StatusBoard,TEXT("Cube"),FVector(12,650,94),CAReadability::Ink(),0,false);
+    StatusBoard->SetRelativeLocation(FVector(-32,0,430));
+    CAReadability::Surface(StatusBoard,CAReadability::Ink());
+    Status->SetRelativeLocation(FVector(-40,0,430));Status->SetRelativeRotation(FRotator(0,180,0));
+    Status->SetHorizontalAlignment(EHTA_Center);Status->SetVerticalAlignment(EVRTA_TextCenter);Status->SetWorldSize(30);
+    CAReadability::Lettering(Status);
 }
 void ACAExitDoor::Tick(float DeltaSeconds)
 {

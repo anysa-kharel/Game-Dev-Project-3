@@ -5,6 +5,7 @@
 #include "ArenaLayout.h"
 #include "WayfindingRules.h"
 #include "CampaignRules.h"
+#include "CAReadableSigns.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/LightComponent.h"
 #include "Components/SceneComponent.h"
@@ -58,6 +59,7 @@ void ACAArenaBuilder::Sign(const FVector& Location,const FString& Label,float Si
     Text->SetHorizontalAlignment(EHTA_Center); Text->SetVerticalAlignment(EVRTA_TextCenter);
     Text->SetTextRenderColor(Color.ToFColor(true));
     CAConstruction::Tag(Actor,TEXT("ClockArena/Signs"));
+    CAReadability::Style(Actor);
 }
 void ACAArenaBuilder::Floor(float X,float Length,float Width,float Height)
 {
@@ -316,6 +318,7 @@ void ACAArenaBuilder::RefreshPresentation()
     {
         ACAScenery* Item=*It;
         if (!Item->Tags.Contains(TEXT("CAExpansion"))) continue;
+        if (Item->Tags.Contains(TEXT("CAReadabilityPanel"))) continue;
         if (Item->Tags.Contains(TEXT("CARouteArrow"))) { OldArrows.Add(Item); continue; }
         // Replace only the original oversized black backdrop, not the user's walls.
         if (!Item->bSolid && Item->Dimensions.Equals(FVector(22000,100,6000),0.1f))
@@ -368,4 +371,6 @@ void ACAArenaBuilder::RefreshPresentation()
     }
     for (TActorIterator<ACAZone> It(GetWorld());It;++It) It->RefreshMarker();
     for (TActorIterator<ACAClockBridge> It(GetWorld());It;++It) It->OnConstruction(It->GetActorTransform());
+    for (TActorIterator<ACAExitDoor> It(GetWorld());It;++It) It->RefreshSign();
+    CAReadability::Refresh(GetWorld());
 }

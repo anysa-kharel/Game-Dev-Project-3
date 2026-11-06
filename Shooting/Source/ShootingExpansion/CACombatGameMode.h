@@ -4,10 +4,12 @@
 #include "CombatRules.h"
 #include "WayfindingRules.h"
 #include "CampaignRules.h"
+#include "CAInterfaceRules.h"
 #include "CACombatGameMode.generated.h"
 class ACAEnemy;
 class ACAClockBridge;
 class UDamageType;
+class UUserWidget;
 
 UCLASS()
 class SHOOTINGEXPANSION_API ACACombatGameMode : public AGameModeBase
@@ -38,9 +40,11 @@ public:
     bool bWon=false;
     bool bHelp=false;
     bool bCampaign=false;
+    CAInterface::StartGate StartFlow;
     int32 AnnouncedSection=0,AnnouncedWave=-1;
     FString Message;
-    bool IsActive() const { return bReady && !bPaused && !bWon && PlayerHealth.Alive(); }
+    bool IsActive() const { return bReady && StartFlow.Running() && !bPaused && !bWon && PlayerHealth.Alive(); }
+    void RequestStart();
     int32 RemainingEnemies() const;
     int32 RemainingInSection(int32 Section) const;
     int32 ActiveSection() const;
@@ -71,5 +75,12 @@ private:
     void StopPlayerFire();
     void RefillMagazine();
     void ActorSpawned(AActor* Actor);
+    void ShowControls();
+    void BeginRun();
+    void HideTemplateHUD();
+    void RestoreTemplateHUD();
+    bool bPriorClickEvents=false,bPriorMouseOver=false;
+    TArray<TWeakObjectPtr<UUserWidget>> IntroWidgets;
+    TArray<uint8> IntroVisibility;
     FDelegateHandle BulletSpawnHandle;
 };

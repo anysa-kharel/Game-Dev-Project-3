@@ -3,6 +3,8 @@
 #include "CAArenaActors.h"
 #include "CAEnemy.h"
 #include "CAUtil.h"
+#include "CanvasItem.h"
+#include "CAInterfaceRules.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
@@ -12,7 +14,9 @@
 
 void ACACombatHUD::Label(const FString& Value,float X,float Y,float Size,const FLinearColor& Color)
 {
-    DrawText(Value,Color,X,Y,GEngine->GetMediumFont(),Size/16*S,false);
+    FCanvasTextItem Item(FVector2D(X,Y),FText::FromString(Value),GEngine->GetMediumFont(),Color);
+    Item.Scale=FVector2D(Size/16*S);Item.bOutlined=true;Item.OutlineColor=FLinearColor(0.002f,0.004f,0.008f,1);
+    Item.EnableShadow(FLinearColor::Black,FVector2D(1,1));Canvas->DrawItem(Item);
 }
 void ACACombatHUD::Center(const FString& Value,float Y,float Size,const FLinearColor& Color)
 {
@@ -33,6 +37,7 @@ void ACACombatHUD::DrawHUD()
     if (!G || !G->PlayerPawn) return;
     W=Canvas->SizeX; H=Canvas->SizeY;
     S=FMath::Clamp(FMath::Min(W/1600.0f,H/900.0f),0.5f,2.0f);
+    if (G->StartFlow.Waiting()) { DrawControls();return; }
     Panel(28*S,28*S,830*S,92*S,CA::Cyan());
     Label(G->bCampaign ? TEXT("CLOCK ARENA / CITADEL RUN") : TEXT("CLOCK ARENA"),46*S,40*S,13,CA::Cyan());
     Label(G->Objective(),46*S,70*S,22,CA::White());
@@ -174,7 +179,7 @@ void ACACombatHUD::DrawHUD()
         const TCHAR* Lines[]={
             TEXT("WASD move / MOUSE look / SPACE jump"),
             TEXT("LEFT CLICK shoot / RIGHT CLICK aim / R reload"),
-            TEXT("SHIFT sprint / crouch behind low cover"),
+            TEXT("SHIFT sprint / C crouch behind low cover"),
             TEXT("RED guards fire one bolt. GOLD rushers close in."),
             TEXT("CYAN sentries fire two bolts. Use the galleries."),
             TEXT("VIOLET skirmishers strafe. Track their movement."),

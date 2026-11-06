@@ -65,6 +65,7 @@ public:
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Beacon;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> FlagPole;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Flag;
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> FlagStripe;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> FlagCap;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UTextRenderComponent> FlagFront;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UTextRenderComponent> FlagBack;
@@ -89,6 +90,8 @@ public:
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Panel;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Light;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UTextRenderComponent> Status;
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> StatusBoard;
+    void RefreshSign();
     UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Gate") int32 RequiredSection=0;
     float Open=0;
 };

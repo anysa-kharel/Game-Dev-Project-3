@@ -4,6 +4,8 @@
 #include "CACombatHUD.h"
 #include "CAEnemy.h"
 #include "CAUtil.h"
+#include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Components/InputComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -53,6 +55,7 @@ void ACACombatGameMode::BeginPlay()
 }
 void ACACombatGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    RestoreTemplateHUD();
     if (GetWorld()) GetWorld()->RemoveOnActorSpawnedHandler(BulletSpawnHandle);
     Super::EndPlay(EndPlayReason);
 }
@@ -83,16 +86,20 @@ void ACACombatGameMode::SetupPlayer()
         InputComponent->BindKey(EKeys::BackSpace,IE_Pressed,this,&ACACombatGameMode::RetryCheckpoint);
         InputComponent->BindKey(EKeys::F1,IE_Pressed,this,&ACACombatGameMode::ToggleHelp).bExecuteWhenPaused=true;
     }
-    PC->bShowMouseCursor=false;
-    FInputModeGameOnly Mode; Mode.SetConsumeCaptureMouseDown(false); PC->SetInputMode(Mode);
     RestorePlayer();
-    Say(bCampaign ? TEXT("CITADEL RUN / 5 SECTORS / 4 CLOCK BRIDGES / Clear each squad, then follow the flags. F1: guide.")
-        : TEXT("CLEAR THE YARD, THEN FOLLOW GOLD ARROWS / FLAG 1 > CLOCK HAND > FLAG 2 > EXIT. F1: help."),8);
+    ShowControls();
 }
 void ACACombatGameMode::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
     if (!bReady) { SetupPlayer(); return; }
+    if (StartFlow.Waiting())
+    {
+        HideTemplateHUD();
+        if (APlayerController* PC=UGameplayStatics::GetPlayerController(GetWorld(),0))
+            if (StartFlow.Step(PC->IsInputKeyDown(EKeys::LeftMouseButton),PC->IsInputKeyDown(EKeys::Enter))) BeginRun();
+        return;
+    }
     if (bPaused || bWon) return;
     HitMarker=FMath::Max(0.0f,HitMarker-DeltaSeconds);
     DamageFlash=FMath::Max(0.0f,DamageFlash-DeltaSeconds);
@@ -228,12 +235,13 @@ void ACACombatGameMode::RetryCheckpoint()
 }
 void ACACombatGameMode::TogglePause()
 {
-    if (!bReady || bWon || !PlayerHealth.Alive()) return;
+    if (!bReady || StartFlow.Waiting() || bWon || !PlayerHealth.Alive()) return;
     bPaused=!bPaused;
     UGameplayStatics::SetGamePaused(GetWorld(),bPaused);
 }
 void ACACombatGameMode::Confirm()
 {
+    if (StartFlow.Waiting()) { RequestStart(); return; }
     if (bWon)
     {
         UGameplayStatics::OpenLevel(this,FName(*UGameplayStatics::GetCurrentLevelName(this,true)));
@@ -241,7 +249,7 @@ void ACACombatGameMode::Confirm()
     }
     if (bPaused) TogglePause();
 }
-void ACACombatGameMode::ToggleHelp() { bHelp=!bHelp; }
+void ACACombatGameMode::ToggleHelp() { if (StartFlow.Running()) bHelp=!bHelp; }
 void ACACombatGameMode::TryWin()
 {
     if (!IsActive()) return;
@@ -336,4 +344,59 @@ FVector ACACombatGameMode::Waypoint() const
     }
     return Closest ? Closest->GetActorLocation()+FVector(0,0,130)
         : FlagLocation(0,true,FVector(9780,0,600));
+}
+
+void ACACombatGameMode::ShowControls()
+{
+    if (APlayerController* PC=UGameplayStatics::GetPlayerController(GetWorld(),0))
+    {
+        StopPlayerFire();
+        PlayerPawn->DisableInput(PC);
+        PC->SetIgnoreMoveInput(true);PC->SetIgnoreLookInput(true);
+        bPriorClickEvents=PC->bEnableClickEvents;bPriorMouseOver=PC->bEnableMouseOverEvents;
+        PC->bEnableClickEvents=true;PC->bEnableMouseOverEvents=true;PC->bShowMouseCursor=true;
+        FInputModeGameAndUI Mode;
+        Mode.SetHideCursorDuringCapture(false);Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+        PC->SetInputMode(Mode);
+    }
+    HideTemplateHUD();
+}
+void ACACombatGameMode::RequestStart()
+{
+    if (bReady && StartFlow.Waiting()) StartFlow.Request();
+}
+void ACACombatGameMode::BeginRun()
+{
+    if (!PlayerPawn) return;
+    StopPlayerFire();RestoreTemplateHUD();
+    if (APlayerController* PC=UGameplayStatics::GetPlayerController(GetWorld(),0))
+    {
+        PC->SetIgnoreMoveInput(false);PC->SetIgnoreLookInput(false);
+        PC->bShowMouseCursor=false;PC->bEnableClickEvents=bPriorClickEvents;PC->bEnableMouseOverEvents=bPriorMouseOver;
+        FInputModeGameOnly Mode;Mode.SetConsumeCaptureMouseDown(false);PC->SetInputMode(Mode);
+        PlayerPawn->EnableInput(PC);
+    }
+    Say(bCampaign ? TEXT("CITADEL RUN / Clear each squad, follow the flags, and ride the GOLD clock hands. F1: guide.")
+        : TEXT("CLEAR THE YARD / Follow the flags and ride the GOLD hand. F1: guide."),7);
+}
+void ACACombatGameMode::HideTemplateHUD()
+{
+    TArray<UUserWidget*> Widgets;
+    UWidgetBlueprintLibrary::GetAllWidgetsOfClass(this,Widgets,UUserWidget::StaticClass(),true);
+    for (UUserWidget* Widget : Widgets)
+    {
+        if (!IsValid(Widget) || !Widget->GetClass()->GetName().Contains(TEXT("WBP_PlayerUI"))) continue;
+        const bool Saved=IntroWidgets.ContainsByPredicate([Widget](const TWeakObjectPtr<UUserWidget>& Item) { return Item.Get()==Widget; });
+        if (!Saved)
+        {
+            IntroWidgets.Add(Widget);IntroVisibility.Add(static_cast<uint8>(Widget->GetVisibility()));
+        }
+        Widget->SetVisibility(ESlateVisibility::Collapsed);
+    }
+}
+void ACACombatGameMode::RestoreTemplateHUD()
+{
+    for (int32 I=0;I<IntroWidgets.Num();++I)
+        if (UUserWidget* Widget=IntroWidgets[I].Get()) Widget->SetVisibility(static_cast<ESlateVisibility>(IntroVisibility[I]));
+    IntroWidgets.Empty();IntroVisibility.Empty();
 }
