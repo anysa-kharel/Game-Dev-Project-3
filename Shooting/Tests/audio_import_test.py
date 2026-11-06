@@ -45,7 +45,7 @@ class AudioPreparation(unittest.TestCase):
         for name in self.module.PRESENTATION_AUDIO:(source/(name+'.wav')).write_bytes(b'import task fixture')
     def test_new_sources_are_imported_and_music_is_configured(self):
         self.source_files();self.module._sounds()
-        self.assertEqual(len(self.imports),3)
+        self.assertEqual(len(self.imports),4)
         for name,loop in self.module.PRESENTATION_AUDIO.items():
             sound=self.assets[self.module.ASSET_ROOT+'/Audio/'+name]
             self.assertEqual(sound.props['looping'],loop)
@@ -69,6 +69,10 @@ class AudioPreparation(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'Could not save audio settings'):self.module._sounds()
     def test_gate_cue_is_forced_to_one_shot(self):
         self.existing();path=self.module.ASSET_ROOT+'/Audio/S_GateOpen';self.assets[path].props['looping']=True
+        self.module._sounds();self.assertFalse(self.assets[path].props['looping']);self.assertEqual(self.saved,[path])
+
+    def test_reload_cue_is_forced_to_one_shot(self):
+        self.existing();path=self.module.ASSET_ROOT+'/Audio/S_Reload';self.assets[path].props['looping']=True
         self.module._sounds();self.assertFalse(self.assets[path].props['looping']);self.assertEqual(self.saved,[path])
 
 if __name__=='__main__':unittest.main(verbosity=1)

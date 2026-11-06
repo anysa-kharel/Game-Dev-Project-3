@@ -149,6 +149,8 @@ def _map():
         for actor in actors.get_all_level_actors():
             if actor.get_class().get_path_name() == "/Script/ShootingExpansion.CAArenaBuilder":
                 actor.refresh_presentation()
+                if not actor.validate_clock_lessons():
+                    raise RuntimeError("Clock lessons could not be applied to the saved map. Check all four clocks and both jump landings. Your campaign layout was preserved.")
                 refreshed += 1
         if not refreshed:
             raise RuntimeError("The saved arena has no CAArenaBuilder to refresh. Your existing map was preserved.")
@@ -166,6 +168,8 @@ def _map():
         raise RuntimeError("Could not place the native level builder.")
     builder.set_actor_label("CITADEL RUN - Five-sector campaign builder")
     builder.build_campaign()
+    if not builder.validate_clock_lessons():
+        raise RuntimeError("The new campaign did not pass clock lesson validation.")
     if not levels.save_current_level():
         raise RuntimeError("Could not save the generated map.")
     try:
@@ -191,7 +195,7 @@ def prepare():
     _sounds()
     created = _map()
     unreal.log(
-        "TICK TOCK READY / AMMO LABEL + RELOAD AUDIO / 5 SECTORS / 4 CLOCK BRIDGES / 60 ROBOTS. Press Play, then START or ENTER. M toggles music."
+        "TICK TOCK READY / RIDE > CROUCH > JUMP > COMBINE / 5 SECTORS / 4 CLOCK LESSONS / 60 ROBOTS. Press Play, then START or ENTER. M toggles music."
         + (" Native map, material and sounds have been generated." if created else "")
     )
 

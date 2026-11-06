@@ -134,7 +134,7 @@ void ACACombatHUD::DrawControls()
         Text(MoveLabels[I],X+56,319,14,Muted,112,true,1,true);
     }
     const TCHAR* MovementKeys[]={TEXT("SPACE"),TEXT("SHIFT + W"),TEXT("C"),TEXT("MOUSE")};
-    const TCHAR* MovementActions[]={TEXT("Jump"),TEXT("Sprint (Run Faster)"),TEXT("Crouch"),TEXT("Look around")};
+    const TCHAR* MovementActions[]={TEXT("Jump / clock gaps"),TEXT("Sprint (Run Faster)"),TEXT("Crouch / low beams"),TEXT("Look around")};
     for (int32 I=0;I<4;++I)
     {
         const float Y=350+I*42;Key(MovementKeys[I],24,Y,118);
@@ -149,7 +149,7 @@ void ACACombatHUD::DrawControls()
     }
 
     Box(0,553,3,24,Gold);
-    Text(TEXT("CLEAR ROBOT WAVES  /  FOLLOW FLAGS  /  RIDE CLOCK HANDS  /  REACH THE EXIT"),16,558,15,White,1144,true,1);
+    Text(TEXT("CLEAR ROBOTS / FOLLOW FLAGS / RIDE > CROUCH > JUMP > COMBINE / REACH THE EXIT"),16,558,15,White,1144,true,1);
     const auto Start=Layout.Start();float MX=-1,MY=-1;
     const bool Hover=PlayerOwner && PlayerOwner->GetMousePosition(MX,MY) && Start.Contains(MX,MY);
     DrawRect(FLinearColor(0,0,0,0.65f),Start.X,Start.Y+4*U,Start.W,Start.H);

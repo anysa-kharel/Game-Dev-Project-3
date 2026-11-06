@@ -169,7 +169,7 @@ void ACACombatGameMode::SaveCheckpoint(int32 Index)
     if (bCampaign)
     {
         Say(FString::Printf(TEXT("FLAG %d SAVED / Health and magazine restored. %s"),Index,
-            Index%2 ? TEXT("Wait for the GOLD hand, then ride from 9 to 3.") : TEXT("Next sector ahead. Watch the new enemy silhouettes.")),6);
+            Index%2 ? TEXT("Read the CLOCK LESSON sign, then board at 9.") : TEXT("Next sector ahead. Watch the new enemy silhouettes.")),6);
         return;
     }
     Say(Index==1 ? TEXT("FLAG 1 SAVED / Your flag reads SAVED. Board the GOLD hand at 9, then ride to FLAG 2.")

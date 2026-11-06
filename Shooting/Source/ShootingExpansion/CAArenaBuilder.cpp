@@ -348,7 +348,17 @@ void ACAArenaBuilder::RefreshPresentation()
             }
             if (Sector<Campaign::Sectors-1)
                 for (double Offset : {3900.0,4500.0,5200.0,7750.0,8500.0})
-                    Route.Add({Sector*Campaign::Spacing+Offset,0,0});
+                {
+                    double Position=Offset;
+                    if (Offset==7750 && ClockLessons::Jump(Sector+1))
+                    {
+                        double Radius=1200;
+                        for (TActorIterator<ACAClockBridge> Bridge(GetWorld());Bridge;++Bridge)
+                            if (Bridge->SectionBefore==Sector+1) { Radius=Bridge->HandLength;break; }
+                        Position=Campaign::ClockOffset+Radius+ClockLessons::Gap+180;
+                    }
+                    Route.Add({Sector*Campaign::Spacing+Position,0,0});
+                }
         }
     }
     else for (const auto& Arrow : Wayfinding::Arrows) Route.Add(Arrow);
@@ -373,6 +383,7 @@ void ACAArenaBuilder::RefreshPresentation()
         Stripe(FVector(25,-22,0),FVector(70,20,3),40);
         Stripe(FVector(25,22,0),FVector(70,20,3),-40);
     }
+    RefreshClockLessons();
     for (TActorIterator<ACAZone> It(GetWorld());It;++It) It->RefreshMarker();
     for (TActorIterator<ACAClockBridge> It(GetWorld());It;++It) It->OnConstruction(It->GetActorTransform());
     for (TActorIterator<ACAExitDoor> It(GetWorld());It;++It) It->RefreshSign();

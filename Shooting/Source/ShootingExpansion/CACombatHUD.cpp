@@ -153,7 +153,14 @@ void ACACombatHUD::DrawHUD()
         DrawRect(CATheme::PanelFill(),W*0.06f,H-197*S,W*0.88f,42*S);
         Center(G->Message,H-185*S,13,CATheme::White());
     }
-    if (G->Clock && FMath::Abs(G->PlayerPawn->GetActorLocation().X-G->Clock->GetActorLocation().X)<G->Clock->HandLength+800)
+    if (G->Clock && G->bCampaign && G->Clock->SectionBefore==G->ActiveSection() &&
+        G->CheckpointIndex<G->Clock->SectionBefore*2 && G->RemainingInSection(G->ActiveSection())==0 &&
+        FMath::Abs(G->PlayerPawn->GetActorLocation().X-G->Clock->GetActorLocation().X)<2800)
+    {
+        Panel(28*S,H-265*S,W-56*S,55*S,CATheme::Gold());
+        Center(G->Clock->LessonHint(),H-247*S,16,CATheme::White());
+    }
+    else if (!G->bCampaign && G->Clock && FMath::Abs(G->PlayerPawn->GetActorLocation().X-G->Clock->GetActorLocation().X)<G->Clock->HandLength+800)
     {
         const bool Near=CombatRules::AtDock(G->Clock->Angle(),false);
         const bool Far=CombatRules::AtDock(G->Clock->Angle(),true);
@@ -184,10 +191,10 @@ void ACACombatHUD::DrawHUD()
             TEXT("BLUE shields: flank or fire when they lower."),
             TEXT("ORANGE bombers: leave the warning circle."),
             TEXT("The crowned WARDEN fires a wide bolt fan."),
-            TEXT("Clear both waves, then follow the GOLD arrows."),
+            TEXT("Clear waves / Follow flags / Reach the GOLD EXIT."),
             TEXT("SAVED flags restore health, ammo, and progress."),
-            TEXT("Ride each GOLD hand from 9 to 3. Stay aboard."),
-            TEXT("Clear every sector, then enter the GOLD EXIT."),
+            TEXT("Clocks: 1 RIDE / 2 CROUCH / 3 JUMP / 4 COMBINE."),
+            TEXT("For gaps: keep W held, then SPACE at the gold tip."),
             TEXT("P pause / BACKSPACE retry / F1 close guide")
         };
         float YLine=Y+65*S;

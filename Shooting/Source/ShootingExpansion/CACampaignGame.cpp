@@ -48,9 +48,16 @@ FString ACACombatGameMode::CampaignObjective() const
     {
     case Campaign::Goal::Fight:
         return FString::Printf(TEXT("%d/5 / %s / WAVE %d OF 2"),S,UTF8_TO_TCHAR(Campaign::Names[S-1]),ActiveWave()+1);
-    case Campaign::Goal::NearFlag: return FString::Printf(TEXT("SECTOR CLEAR / WALK THROUGH FLAG %d"),CheckpointIndex+1);
-    case Campaign::Goal::Board: return FString::Printf(TEXT("CLOCK %d / BOARD AT 9 / RIDE TO 3"),S);
-    case Campaign::Goal::FarFlag: return FString::Printf(TEXT("STAY ABOARD / THEN REACH FLAG %d"),CheckpointIndex+1);
+    case Campaign::Goal::NearFlag:
+        for (ACAClockBridge* Bridge : Clocks)
+            if (IsValid(Bridge) && Bridge->SectionBefore==S && PlayerPawn &&
+                ClockLessons::AtApproach(PlayerPawn->GetActorLocation().X-Bridge->GetActorLocation().X) &&
+                (S==2 || S==3)) return Bridge->LessonHint();
+        return FString::Printf(TEXT("SECTOR CLEAR / WALK THROUGH FLAG %d"),CheckpointIndex+1);
+    case Campaign::Goal::Board: case Campaign::Goal::FarFlag:
+        for (ACAClockBridge* Bridge : Clocks)
+            if (IsValid(Bridge) && Bridge->SectionBefore==S) return Bridge->LessonHint();
+        return FString::Printf(TEXT("CLOCK %d / FOLLOW THE GOLD FLAG"),S);
     default: return TEXT("CITADEL SECURED / REACH THE GOLD EXIT");
     }
 }

@@ -2,6 +2,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "AudioPresentationRules.h"
+#include "ClockLessonRules.h"
 #include "CAArenaActors.generated.h"
 class UStaticMeshComponent;
 class USceneComponent;
@@ -48,6 +49,15 @@ public:
     bool bStarted=false;
     float Angle() const;
     void ResetClock();
+    int32 LessonStage() const { return ClockLessons::Stage(SectionBefore); }
+    FString LessonHint() const;
+    bool LessonGeometryReady() const { return bLessonGeometryBuilt; }
+private:
+    void BuildLessonGeometry();
+    void UpdateLessonGeometry();
+    UPROPERTY(Transient) TArray<TObjectPtr<UStaticMeshComponent>> LessonBeams;
+    float StandingCapsuleHeight=0,CrouchedCapsuleHeight=0,CurrentBeamClearance=150;
+    bool bPassedLessonBeam=false,bLessonGeometryBuilt=false;
 };
 
 UENUM(BlueprintType)

@@ -15,6 +15,7 @@ class SavedMapUpgrade(unittest.TestCase):
         self.builder = SimpleNamespace(
             get_class=lambda: SimpleNamespace(get_path_name=lambda: "/Script/ShootingExpansion.CAArenaBuilder"),
             refresh_presentation=Mock(), build_campaign=Mock(), set_actor_label=Mock(),
+            validate_clock_lessons=Mock(return_value=True),
         )
         self.levels = SimpleNamespace(load_level=Mock(return_value=True), new_level=Mock(return_value=True),
                                       save_current_level=Mock(return_value=True))
@@ -44,6 +45,7 @@ class SavedMapUpgrade(unittest.TestCase):
     def test_saved_map_gets_refreshed_and_saved_without_rebuild(self):
         self.assertFalse(self.module._map())
         self.builder.refresh_presentation.assert_called_once()
+        self.builder.validate_clock_lessons.assert_called_once()
         self.builder.build_campaign.assert_not_called()
         self.levels.new_level.assert_not_called()
         self.levels.save_current_level.assert_called_once()
@@ -77,6 +79,18 @@ class SavedMapUpgrade(unittest.TestCase):
     def test_failed_save_reports_failure(self):
         self.levels.save_current_level.return_value=False
         with self.assertRaises(RuntimeError): self.module._map()
+
+    def test_invalid_saved_lessons_do_not_save_or_rebuild(self):
+        self.builder.validate_clock_lessons.return_value=False
+        with self.assertRaisesRegex(RuntimeError,"Clock lessons could not be applied"):self.module._map()
+        self.levels.save_current_level.assert_not_called()
+        self.builder.build_campaign.assert_not_called()
+
+    def test_invalid_new_lessons_do_not_report_success(self):
+        self.unreal.EditorAssetLibrary.does_asset_exist.return_value=False
+        self.builder.validate_clock_lessons.return_value=False
+        with self.assertRaisesRegex(RuntimeError,"clock lesson validation"):self.module._map()
+        self.levels.save_current_level.assert_not_called()
 
     def test_new_project_builds_a_map_once(self):
         self.unreal.EditorAssetLibrary.does_asset_exist.return_value=False

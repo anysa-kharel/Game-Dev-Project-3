@@ -67,6 +67,7 @@ void ACAClockBridge::OnConstruction(const FTransform& Transform)
         Part(FVector(HandLength*0.5f,Side*(HandWidth*0.5f+8),45),
             FVector(HandLength-220,16,90),CA::Steel(),true);
     Pivot->SetRelativeRotation(FRotator(0,Angle(),0));
+    BuildLessonGeometry();
 }
 void ACAClockBridge::BeginPlay()
 {
@@ -80,7 +81,7 @@ float ACAClockBridge::Angle() const
 }
 void ACAClockBridge::ResetClock()
 {
-    Age=0; bStarted=false;
+    Age=0; bStarted=false;bPassedLessonBeam=false;
     Pivot->SetRelativeRotation(FRotator(0,180,0));
 }
 void ACAClockBridge::Tick(float DeltaSeconds)
@@ -88,6 +89,7 @@ void ACAClockBridge::Tick(float DeltaSeconds)
     Super::Tick(DeltaSeconds);
     const ACACombatGameMode* G=CA::Game(GetWorld());
     if (!G || !G->IsActive() || !G->PlayerPawn) return;
+    UpdateLessonGeometry();
     if (SectionBefore>0)
     {
         const FVector P=G->PlayerPawn->GetActorLocation()-GetActorLocation();
@@ -95,7 +97,7 @@ void ACAClockBridge::Tick(float DeltaSeconds)
             && G->CheckpointIndex>=SectionBefore*2-1) bStarted=true;
     }
     else if (G->PlayerPawn->GetActorLocation().X>2550) bStarted=true;
-    if (bStarted) Age+=DeltaSeconds;
+    Age=ClockLessons::Advance(Age,DeltaSeconds,Period,bStarted,LessonStage());
     Pivot->SetRelativeRotation(FRotator(0,Angle(),0));
 }
 

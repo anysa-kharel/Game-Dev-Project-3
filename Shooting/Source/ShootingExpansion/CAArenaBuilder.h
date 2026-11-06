@@ -15,6 +15,8 @@ public:
     UFUNCTION(BlueprintCallable,CallInEditor,Category="Arena") void BuildCampaign();
     // Refresh the saved map without replacing its layout or gameplay actors.
     UFUNCTION(BlueprintCallable,CallInEditor,Category="Arena") void RefreshPresentation();
+    UFUNCTION(BlueprintCallable,CallInEditor,Category="Arena") void RefreshClockLessons();
+    UFUNCTION(BlueprintCallable,Category="Arena") bool ValidateClockLessons() const;
 private:
     void Block(const FVector& Location,const FVector& Size,const FLinearColor& Color,
         bool Solid=true,float Glow=0,const FRotator& Rotation=FRotator::ZeroRotator,
