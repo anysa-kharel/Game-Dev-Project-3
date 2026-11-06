@@ -1,6 +1,7 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "AudioPresentationRules.h"
 #include "CAArenaActors.generated.h"
 class UStaticMeshComponent;
 class USceneComponent;
@@ -9,6 +10,7 @@ class USphereComponent;
 class UPrimitiveComponent;
 class UProjectileMovementComponent;
 class UTextRenderComponent;
+class UAudioComponent;
 
 UCLASS(Blueprintable)
 class SHOOTINGEXPANSION_API ACAScenery : public AActor
@@ -91,9 +93,11 @@ public:
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Light;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UTextRenderComponent> Status;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> StatusBoard;
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UAudioComponent> GateOpenAudio;
     void RefreshSign();
     UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Gate") int32 RequiredSection=0;
     float Open=0;
+    PresentationAudio::GateCue OpeningCue;
 };
 
 UCLASS()

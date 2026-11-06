@@ -2,6 +2,7 @@
 #include "CACombatGameMode.h"
 #include "CAInterfaceRules.h"
 #include "CAUtil.h"
+#include "CATheme.h"
 #include "CanvasItem.h"
 #include "Components/TextRenderComponent.h"
 #include "Engine/Canvas.h"
@@ -16,13 +17,10 @@
 
 namespace TTGGMenu
 {
-    // Palette uses sRGB hex values, converted to Unreal's linear drawing colors.
-    FLinearColor Color(uint8 R,uint8 G,uint8 B,float Alpha=1)
-    { FLinearColor C=FLinearColor::FromSRGBColor(FColor(R,G,B));C.A=Alpha;return C; }
-    const FLinearColor Ink=Color(12,13,14),PanelFill=Color(23,25,27,0.97f);
-    const FLinearColor Gold=Color(211,164,59),BrightGold=Color(239,193,81);
-    const FLinearColor White=Color(244,238,221),Muted=Color(192,185,170);
-    const FLinearColor Edge=Color(91,74,41),KeyFace=Color(41,40,34);
+    const FLinearColor Ink=CATheme::Ink(),PanelFill=CATheme::PanelFill();
+    const FLinearColor Gold=CATheme::Gold(),BrightGold=CATheme::Highlight();
+    const FLinearColor White=CATheme::White(),Muted=CATheme::Muted();
+    const FLinearColor Edge=CATheme::Edge(),KeyFace=CATheme::KeyFace();
     constexpr const TCHAR* Background=TEXT("ClockArena/UI/StartScreenBackground.png");
 }
 
@@ -159,7 +157,7 @@ void ACACombatHUD::DrawControls()
     const FString Caption=G->StartFlow.State==CAInterface::Phase::Armed ? TEXT("RELEASE TO START") : TEXT("START RUN  /  ENTER");
     MenuText(Caption,Start.X+Start.W*0.5f,Start.Y+18*U,23*U,Ink,Start.W-32*U,true,0.86f,true);
     AddHitBox(FVector2D(Start.X,Start.Y),FVector2D(Start.W,Start.H),TEXT("CA_StartRun"),true,100);
-    Text(TEXT("CLICK START OR PRESS ENTER.  /  F1 OPENS THE CONTROLS GUIDE DURING PLAY."),580,667,14,Muted,1160,true,1,true);
+    Text(FString::Printf(TEXT("CLICK START OR ENTER  /  F1 FIELD GUIDE  /  M MUSIC: %s"),G->bMusicMuted ? TEXT("OFF") : TEXT("ON")),580,667,14,Muted,1160,true,1,true);
 }
 
 void ACACombatHUD::NotifyHitBoxClick(FName BoxName)

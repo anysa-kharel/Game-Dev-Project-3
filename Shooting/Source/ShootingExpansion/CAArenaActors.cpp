@@ -5,6 +5,8 @@
 #include "WayfindingRules.h"
 #include "CampaignRules.h"
 #include "CAReadableSigns.h"
+#include "CATheme.h"
+#include "Components/AudioComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SphereComponent.h"
@@ -15,6 +17,8 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Sound/SoundAttenuation.h"
+#include "Sound/SoundBase.h"
 
 ACAScenery::ACAScenery()
 {
@@ -41,7 +45,7 @@ ACAClockBridge::ACAClockBridge()
 void ACAClockBridge::OnConstruction(const FTransform& Transform)
 {
     Super::OnConstruction(Transform);
-    CA::Mesh(Hand,TEXT("Cube"),FVector(HandLength,HandWidth,45),CA::Gold(),0.25f);
+    CA::Mesh(Hand,TEXT("Cube"),FVector(HandLength,HandWidth,45),CATheme::Gold(),0.25f);
     Hand->SetRelativeLocation(FVector(HandLength*0.5f,0,-22.5f));
     Hand->ComponentTags.AddUnique(TEXT("ClockHand"));
     CA::Mesh(Hub,TEXT("Cylinder"),FVector(180,180,80),CA::Steel());
@@ -58,7 +62,7 @@ void ACAClockBridge::OnConstruction(const FTransform& Transform)
         CA::Mesh(Mesh,TEXT("Cube"),Size,Color,0.8f,Solid);
         Mesh->SetRelativeLocation(Location); Mesh->RegisterComponent();
     };
-    Part(FVector(HandLength*0.5f,0,3),FVector(HandLength-50,12,6),CA::Cyan(),false);
+    Part(FVector(HandLength*0.5f,0,3),FVector(HandLength-50,12,6),CATheme::Highlight(),false);
     for (int32 Side : {-1,1})
         Part(FVector(HandLength*0.5f,Side*(HandWidth*0.5f+8),45),
             FVector(HandLength-220,16,90),CA::Steel(),true);
@@ -119,10 +123,10 @@ void ACAZone::OnConstruction(const FTransform& Transform)
 }
 void ACAZone::RefreshMarker()
 {
-    const FLinearColor Color=Kind==ECAZoneKind::Exit ? CA::Gold() : CA::Cyan();
+    const FLinearColor Color=Kind==ECAZoneKind::Exit ? CATheme::Bronze() : CATheme::Gold();
     CA::Mesh(Beacon,TEXT("Cube"),FVector(220,840,5),Color,0.45f,false);
     Beacon->SetRelativeLocation(FVector(0,0,-196));
-    CA::Mesh(FlagPole,TEXT("Cylinder"),FVector(12,12,Wayfinding::FlagHeight),CA::White(),0.1f,false);
+    CA::Mesh(FlagPole,TEXT("Cylinder"),FVector(12,12,Wayfinding::FlagHeight),CATheme::Muted(),0,false);
     FlagPole->SetRelativeLocation(FVector(0,-340,Wayfinding::FlagHeight*0.5f-200));
     CA::Mesh(Flag,TEXT("Cube"),FVector(16,300,180),CAReadability::Ink(),0,false);
     Flag->SetRelativeLocation(FVector(0,-180,400));
@@ -166,17 +170,19 @@ void ACAZone::UpdateMarker()
     const int32 Key=static_cast<int32>(State);
     if (Key==LastMarkerState) return;
     LastMarkerState=Key;
-    const bool Green=State==Wayfinding::FlagState::Saved || State==Wayfinding::FlagState::Open;
-    const FLinearColor Color=Green ? CA::Mint() : State==Wayfinding::FlagState::Locked ? CA::Gold() : CA::Cyan();
+    const bool Unlocked=State==Wayfinding::FlagState::Saved || State==Wayfinding::FlagState::Open;
+    const FLinearColor Color=State==Wayfinding::FlagState::Open ? CATheme::Highlight()
+        : State==Wayfinding::FlagState::Saved ? CATheme::White()
+        : State==Wayfinding::FlagState::Locked ? CATheme::Bronze() : CATheme::Gold();
     const FString Label=Kind==ECAZoneKind::Exit
-        ? (Green ? TEXT("EXIT\nGO HERE") : TEXT("EXIT\nLOCKED"))
-        : FString::Printf(TEXT("FLAG %d\n%s"),CheckpointIndex,Green ? TEXT("SAVED") : TEXT("CHECKPOINT"));
+        ? (Unlocked ? TEXT("EXIT\nOPEN") : TEXT("EXIT\nLOCKED"))
+        : FString::Printf(TEXT("FLAG %d\n%s"),CheckpointIndex,Unlocked ? TEXT("SAVED") : TEXT("CHECKPOINT"));
     FlagFront->SetText(FText::FromString(Label));
     FlagBack->SetText(FText::FromString(Label));
     CAReadability::Surface(Flag,CAReadability::Ink());
     CAReadability::Surface(FlagStripe,Color);
-    CA::Tint(FlagCap,Color,1.0f);
-    CA::Tint(Beacon,Color,0.45f);
+    CAReadability::Surface(FlagCap,Color);
+    CAReadability::Surface(Beacon,Color);
 }
 void ACAZone::Enter(UPrimitiveComponent* Component,AActor* OtherActor,
     UPrimitiveComponent* OtherComp,int32 OtherBodyIndex,bool bFromSweep,const FHitResult& Hit)
@@ -197,13 +203,20 @@ ACAExitDoor::ACAExitDoor()
     Light=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("DoorLight")); Light->SetupAttachment(Root);
     Status=CreateDefaultSubobject<UTextRenderComponent>(TEXT("GateStatus")); Status->SetupAttachment(Root);
     StatusBoard=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("GateStatusBoard")); StatusBoard->SetupAttachment(Root);
+    GateOpenAudio=CreateDefaultSubobject<UAudioComponent>(TEXT("GateOpeningCue"));GateOpenAudio->SetupAttachment(Root);
+    GateOpenAudio->bAutoActivate=false;
+    GateOpenAudio->bOverrideAttenuation=true;
+    GateOpenAudio->AttenuationOverrides.bAttenuate=true;
+    GateOpenAudio->AttenuationOverrides.AttenuationShape=EAttenuationShape::Sphere;
+    GateOpenAudio->AttenuationOverrides.AttenuationShapeExtents=FVector(600);
+    GateOpenAudio->AttenuationOverrides.FalloffDistance=7000;
 }
 void ACAExitDoor::OnConstruction(const FTransform& Transform)
 {
     Super::OnConstruction(Transform);
     CA::Mesh(Panel,TEXT("Cube"),FVector(50,1000,310),CA::Steel());
     Panel->SetRelativeLocation(FVector(0,0,155));
-    CA::Mesh(Light,TEXT("Cube"),FVector(70,1100,25),CA::Red(),2,false);
+    CA::Mesh(Light,TEXT("Cube"),FVector(70,1100,25),CATheme::Bronze(),0,false);
     Light->SetRelativeLocation(FVector(0,0,345));
     RefreshSign();
     Status->SetText(FText::FromString(RequiredSection>0 ? TEXT("CLEAR BOTH WAVES") : TEXT("FINAL EXTRACTION")));
@@ -216,18 +229,27 @@ void ACAExitDoor::RefreshSign()
     Status->SetRelativeLocation(FVector(-40,0,430));Status->SetRelativeRotation(FRotator(0,180,0));
     Status->SetHorizontalAlignment(EHTA_Center);Status->SetVerticalAlignment(EVRTA_TextCenter);Status->SetWorldSize(30);
     CAReadability::Lettering(Status);
+    CAReadability::Surface(Light,Open>0 ? CATheme::Highlight() : CATheme::Bronze());
 }
 void ACAExitDoor::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
     const ACACombatGameMode* G=CA::Game(GetWorld());
-    if (!G || !G->IsActive()) return;
+    if (!G || !G->IsActive() || Open>=1.0f) return;
     const int32 Remaining=RequiredSection>0 ? G->RemainingInSection(RequiredSection) : G->RemainingEnemies();
     if (Remaining>0) return;
+    if (OpeningCue.Opened())
+    {
+        if (USoundBase* Sound=LoadObject<USoundBase>(nullptr,
+            TEXT("/Game/ClockArena/Audio/S_GateOpen.S_GateOpen"),nullptr,LOAD_NoWarn|LOAD_Quiet))
+        { GateOpenAudio->SetSound(Sound);GateOpenAudio->SetVolumeMultiplier(0.4f);GateOpenAudio->Play(); }
+        if (G->PlayerPawn && FVector::DistSquared(GetActorLocation(),G->PlayerPawn->GetActorLocation())<FMath::Square(7600.0))
+            if (ACACombatGameMode* Mode=CA::Game(GetWorld())) Mode->DuckMusic(1.4f);
+    }
     Panel->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     Open=FMath::Min(1.0f,Open+DeltaSeconds);
     Panel->SetRelativeLocation(FVector(0,0,155+350*Open));
-    CA::Tint(Light,CA::Mint(),2);
+    CAReadability::Surface(Light,CATheme::Highlight());
     Status->SetText(FText::FromString(RequiredSection>0 ? TEXT("CLOCK BRIDGE OPEN") : TEXT("EXIT OPEN")));
 }
 

@@ -55,6 +55,7 @@ void ACACombatGameMode::BeginPlay()
 }
 void ACACombatGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    StopMusic();
     RestoreTemplateHUD();
     if (GetWorld()) GetWorld()->RemoveOnActorSpawnedHandler(BulletSpawnHandle);
     Super::EndPlay(EndPlayReason);
@@ -85,6 +86,7 @@ void ACACombatGameMode::SetupPlayer()
         InputComponent->BindKey(EKeys::Enter,IE_Pressed,this,&ACACombatGameMode::Confirm).bExecuteWhenPaused=true;
         InputComponent->BindKey(EKeys::BackSpace,IE_Pressed,this,&ACACombatGameMode::RetryCheckpoint);
         InputComponent->BindKey(EKeys::F1,IE_Pressed,this,&ACACombatGameMode::ToggleHelp).bExecuteWhenPaused=true;
+        InputComponent->BindKey(EKeys::M,IE_Pressed,this,&ACACombatGameMode::ToggleMusic).bExecuteWhenPaused=true;
     }
     RestorePlayer();
     ShowControls();
@@ -92,6 +94,12 @@ void ACACombatGameMode::SetupPlayer()
 void ACACombatGameMode::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
+    UpdateMusic(DeltaSeconds);
+    if (StartFlow.Running())
+    {
+        HUDThemeRetry-=DeltaSeconds;
+        if (HUDThemeRetry<=0) { StyleTemplateHUD();HUDThemeRetry=1; }
+    }
     if (!bReady) { SetupPlayer(); return; }
     if (StartFlow.Waiting())
     {
@@ -143,11 +151,11 @@ void ACACombatGameMode::EnemyDefeated(ACAEnemy* Enemy)
     if (bCampaign)
     {
         if (RemainingInSection(ActiveSection())==0)
-            Say(ActiveSection()==5 ? TEXT("WARDEN AND ALL SQUADS CLEARED / Follow the GREEN FINAL EXIT.")
+            Say(ActiveSection()==5 ? TEXT("WARDEN AND ALL SQUADS CLEARED / Follow the GOLD FINAL EXIT.")
                 : TEXT("BOTH WAVES CLEARED / The bridge gate is opening. Follow GOLD arrows to the next flag."),6);
         return;
     }
-    if (RemainingEnemies()==0) Say(TEXT("ALL HOSTILES CLEARED / Follow the EXIT marker to the GREEN exit flag."),6);
+    if (RemainingEnemies()==0) Say(TEXT("ALL HOSTILES CLEARED / Follow the EXIT marker to the GOLD exit flag."),6);
     else if (RemainingInSection(1)==0 && CheckpointIndex<2)
         Say(TEXT("YARD CLEARED / Follow GOLD floor arrows to FLAG 1, then board the gold clock hand."),6);
 }
@@ -163,8 +171,8 @@ void ACACombatGameMode::SaveCheckpoint(int32 Index)
             Index%2 ? TEXT("Wait for the GOLD hand, then ride from 9 to 3.") : TEXT("Next sector ahead. Watch the new enemy silhouettes.")),6);
         return;
     }
-    Say(Index==1 ? TEXT("FLAG 1 SAVED / Your flag is GREEN. Board the GOLD hand at 9, then ride to FLAG 2.")
-        : TEXT("FLAG 2 SAVED / Clear the remaining robots, then follow the GREEN EXIT flag."),7);
+    Say(Index==1 ? TEXT("FLAG 1 SAVED / Your flag reads SAVED. Board the GOLD hand at 9, then ride to FLAG 2.")
+        : TEXT("FLAG 2 SAVED / Clear the remaining robots, then follow the GOLD EXIT flag."),7);
 }
 void ACACombatGameMode::RefillMagazine()
 {
@@ -238,6 +246,7 @@ void ACACombatGameMode::TogglePause()
     if (!bReady || StartFlow.Waiting() || bWon || !PlayerHealth.Alive()) return;
     bPaused=!bPaused;
     UGameplayStatics::SetGamePaused(GetWorld(),bPaused);
+    ApplyPauseMusic();
 }
 void ACACombatGameMode::Confirm()
 {
@@ -280,7 +289,7 @@ FString ACACombatGameMode::Objective() const
     case Wayfinding::Stage::FlagTwo: return TEXT("STAY ON HAND TO 3 / THEN REACH FLAG 2");
     case Wayfinding::Stage::ClearFoundry: return TEXT("CLEAR THE FOUNDRY / THEN REACH THE EXIT");
     case Wayfinding::Stage::ReturnToYard: return TEXT("YARD ROBOTS REMAIN / RIDE CLOCK BACK");
-    default: return TEXT("EXIT OPEN / REACH THE GREEN EXIT FLAG");
+    default: return TEXT("EXIT OPEN / REACH THE GOLD EXIT FLAG");
     }
 }
 FString ACACombatGameMode::WaypointLabel() const
@@ -297,7 +306,7 @@ FString ACACombatGameMode::WaypointLabel() const
     case Wayfinding::Stage::ReturnToYard: return PlayerPawn && PlayerPawn->GetActorLocation().X>5200
         && Clock && !CombatRules::AtDock(Clock->Angle(),true)
         ? TEXT("WAIT FOR RETURN HAND") : TEXT("RIDE BACK TO YARD");
-    default: return TEXT("GREEN EXIT FLAG");
+    default: return TEXT("GOLD EXIT FLAG");
     }
 }
 FVector ACACombatGameMode::Waypoint() const
@@ -368,7 +377,7 @@ void ACACombatGameMode::RequestStart()
 void ACACombatGameMode::BeginRun()
 {
     if (!PlayerPawn) return;
-    StopPlayerFire();RestoreTemplateHUD();
+    StopPlayerFire();RestoreTemplateHUD();StyleTemplateHUD();
     if (APlayerController* PC=UGameplayStatics::GetPlayerController(GetWorld(),0))
     {
         PC->SetIgnoreMoveInput(false);PC->SetIgnoreLookInput(false);

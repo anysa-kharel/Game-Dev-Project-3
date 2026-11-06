@@ -6,6 +6,7 @@
 #include "WayfindingRules.h"
 #include "CampaignRules.h"
 #include "CAReadableSigns.h"
+#include "CATheme.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/LightComponent.h"
 #include "Components/SceneComponent.h"
@@ -325,6 +326,8 @@ void ACAArenaBuilder::RefreshPresentation()
         { Item->Destroy(); continue; }
         if (Item->Color.Equals(FLinearColor(0.025f,0.05f,0.08f),0.001f)) Item->Color=CA::Navy();
         else if (Item->Color.Equals(FLinearColor(0.12f,0.18f,0.23f),0.001f)) Item->Color=CA::Steel();
+        // Presentation accents only: robots own their meshes and keep role colors.
+        if (!Item->bSolid && Item->Glow>0) { Item->Color=CATheme::Gold();Item->Glow=0.15f; }
         Item->OnConstruction(Item->GetActorTransform());
         if (!Item->bSolid) Item->Mesh->SetCastShadow(false);
     }
@@ -359,9 +362,10 @@ void ACAArenaBuilder::RefreshPresentation()
             ACAScenery* Part=GetWorld()->SpawnActorDeferred<ACAScenery>(ACAScenery::StaticClass(),Transform,
                 this,nullptr,ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
             if (!Part) return;
-            Part->Dimensions=Size; Part->Color=CA::Gold(); Part->Glow=0.55f; Part->bSolid=false;
+            Part->Dimensions=Size; Part->Color=CATheme::Gold(); Part->Glow=0.15f; Part->bSolid=false;
             Part->FinishSpawning(Transform);
             Part->Mesh->SetCastShadow(false);
+            CAReadability::Surface(Part->Mesh,CATheme::Gold());
             Part->Tags.AddUnique(TEXT("CARouteArrow"));
             CAConstruction::Tag(Part,TEXT("ClockArena/RouteArrows"));
         };

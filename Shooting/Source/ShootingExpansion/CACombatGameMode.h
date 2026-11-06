@@ -5,13 +5,15 @@
 #include "WayfindingRules.h"
 #include "CampaignRules.h"
 #include "CAInterfaceRules.h"
+#include "AudioPresentationRules.h"
 #include "CACombatGameMode.generated.h"
 class ACAEnemy;
 class ACAClockBridge;
 class UDamageType;
 class UUserWidget;
+class UAudioComponent;
 
-UCLASS()
+UCLASS(Config=Game)
 class SHOOTINGEXPANSION_API ACACombatGameMode : public AGameModeBase
 {
     GENERATED_BODY()
@@ -40,6 +42,13 @@ public:
     bool bWon=false;
     bool bHelp=false;
     bool bCampaign=false;
+    bool bMusicMuted=false;
+    UPROPERTY(Config,EditDefaultsOnly,Category="Audio",meta=(ClampMin="0.0",ClampMax="1.0"))
+    float MenuMusicVolume=0.20f;
+    UPROPERTY(Config,EditDefaultsOnly,Category="Audio",meta=(ClampMin="0.0",ClampMax="1.0"))
+    float GameplayMusicVolume=0.055f;
+    void ToggleMusic();
+    void DuckMusic(float Hold=0.8f);
     CAInterface::StartGate StartFlow;
     int32 AnnouncedSection=0,AnnouncedWave=-1;
     FString Message;
@@ -79,6 +88,15 @@ private:
     void BeginRun();
     void HideTemplateHUD();
     void RestoreTemplateHUD();
+    void StyleTemplateHUD();
+    void UpdateMusic(float DeltaSeconds);
+    void StopMusic();
+    void ApplyPauseMusic();
+    UPROPERTY(Transient) TObjectPtr<UAudioComponent> MenuMusic;
+    UPROPERTY(Transient) TObjectPtr<UAudioComponent> GameMusic;
+    PresentationAudio::Mix MusicMix;
+    float MusicRetry=0,HUDThemeRetry=0;
+    TArray<TWeakObjectPtr<UUserWidget>> ThemedWidgets;
     bool bPriorClickEvents=false,bPriorMouseOver=false;
     TArray<TWeakObjectPtr<UUserWidget>> IntroWidgets;
     TArray<uint8> IntroVisibility;

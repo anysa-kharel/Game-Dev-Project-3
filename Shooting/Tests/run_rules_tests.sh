@@ -11,4 +11,7 @@ c++ -std=c++20 -Wall -Wextra -pedantic "$CA_TEST_DIR/campaign_test.cpp" -o "$CA_
 "$CA_TEST_BIN/campaign"
 c++ -std=c++20 -Wall -Wextra -pedantic "$CA_TEST_DIR/interface_test.cpp" -o "$CA_TEST_BIN/interface"
 "$CA_TEST_BIN/interface"
+c++ -std=c++20 -Wall -Wextra -pedantic "$CA_TEST_DIR/presentation_audio_test.cpp" -o "$CA_TEST_BIN/presentation_audio"
+"$CA_TEST_BIN/presentation_audio"
 python3 "$CA_TEST_DIR/editor_upgrade_test.py"
+python3 "$CA_TEST_DIR/audio_import_test.py"

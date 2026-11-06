@@ -45,6 +45,8 @@ void CA::Tint(UStaticMeshComponent* Component,const FLinearColor& Color,float Gl
 void CA::Sound(UWorld* World,const TCHAR* Name,const FVector& Location,float Volume)
 {
     if (!World) return;
+    // Lower music around existing effects without changing their playback gain.
+    if (ACACombatGameMode* Mode=Game(World)) Mode->DuckMusic();
     const FString Path=FString::Printf(TEXT("/Game/ClockArena/Audio/%s.%s"),Name,Name);
     if (USoundBase* Effect=LoadObject<USoundBase>(nullptr,*Path))
         UGameplayStatics::PlaySoundAtLocation(World,Effect,Location,Volume);

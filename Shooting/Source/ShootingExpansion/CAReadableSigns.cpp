@@ -2,6 +2,7 @@
 #include "CAArenaActors.h"
 #include "CAInterfaceRules.h"
 #include "CAUtil.h"
+#include "CATheme.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Engine/TextRenderActor.h"
@@ -10,11 +11,11 @@
 #include "Materials/MaterialInterface.h"
 
 FLinearColor CAReadability::Ink()
-{ return FLinearColor(CAInterface::Ink.R,CAInterface::Ink.G,CAInterface::Ink.B,1); }
+{ return CATheme::Ink(); }
 void CAReadability::Lettering(UTextRenderComponent* Text)
 {
     if (!Text) return;
-    Text->SetTextRenderColor(FColor::White);Text->SetCastShadow(false);
+    Text->SetTextRenderColor(CATheme::White().ToFColor(true));Text->SetCastShadow(false);
     if (UMaterialInterface* FontMaterial=LoadObject<UMaterialInterface>(nullptr,
         TEXT("/Engine/EngineMaterials/DefaultTextMaterialOpaque.DefaultTextMaterialOpaque"),nullptr,LOAD_NoWarn|LOAD_Quiet))
         Text->SetTextMaterial(FontMaterial);
@@ -74,7 +75,7 @@ void CAReadability::Style(ATextRenderActor* Sign)
     const float Height=FMath::Max(static_cast<float>(Size.Z),Text->WorldSize)+36;
     CAReadableDetail::Part(Sign,TEXT("CAInkBoard"),FVector(8,Width,Height),FVector(-8,0,0),Ink());
     CAReadableDetail::Part(Sign,TEXT("CAInkEdge"),FVector(2,Width,7),FVector(-3,0,-Height*0.5f+4),
-        Text->WorldSize>=48 ? CA::Gold() : CA::Cyan());
+        CATheme::Gold());
 }
 void CAReadability::Refresh(UWorld* World)
 {

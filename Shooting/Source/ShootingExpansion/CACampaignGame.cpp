@@ -51,7 +51,7 @@ FString ACACombatGameMode::CampaignObjective() const
     case Campaign::Goal::NearFlag: return FString::Printf(TEXT("SECTOR CLEAR / WALK THROUGH FLAG %d"),CheckpointIndex+1);
     case Campaign::Goal::Board: return FString::Printf(TEXT("CLOCK %d / BOARD AT 9 / RIDE TO 3"),S);
     case Campaign::Goal::FarFlag: return FString::Printf(TEXT("STAY ABOARD / THEN REACH FLAG %d"),CheckpointIndex+1);
-    default: return TEXT("CITADEL SECURED / REACH THE GREEN EXIT");
+    default: return TEXT("CITADEL SECURED / REACH THE GOLD EXIT");
     }
 }
 FString ACACombatGameMode::CampaignWaypointLabel() const
@@ -64,7 +64,7 @@ FString ACACombatGameMode::CampaignWaypointLabel() const
         return FString::Printf(TEXT("FLAG %d / CHECKPOINT"),CheckpointIndex+1);
     case Campaign::Goal::Board:
         return Clock && !CombatRules::AtDock(Clock->Angle(),false) ? TEXT("WAIT FOR THE GOLD HAND") : TEXT("STEP ONTO THE GOLD HAND");
-    default: return TEXT("GREEN FINAL EXIT");
+    default: return TEXT("GOLD FINAL EXIT");
     }
 }
 FVector ACACombatGameMode::CampaignWaypoint() const

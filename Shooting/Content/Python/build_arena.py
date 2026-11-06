@@ -12,6 +12,7 @@ ASSET_ROOT = "/Game/ClockArena"
 MATERIAL = ASSET_ROOT + "/Materials/M_ArenaDaylight"
 MAP = "/Game/ClockArena/Maps/L_ClockCampaign"
 SIGN_MATERIAL = ASSET_ROOT + "/Materials/M_SignSurface"
+PRESENTATION_AUDIO = {"S_MenuLoop": True, "S_GameAmbience": True, "S_GateOpen": False}
 
 
 def _project_dir():
@@ -107,6 +108,23 @@ def _sounds():
         for task in tasks:
             if not task.get_editor_property("imported_object_paths"):
                 unreal.log_warning("An optional arena sound did not import.")
+    # These sounds are part of this update. Persist loop/virtualization settings
+    # before Play so silent crossfade tracks can resume and packaged audio loops.
+    for name, looping in PRESENTATION_AUDIO.items():
+        path = ASSET_ROOT + "/Audio/" + name
+        sound = unreal.EditorAssetLibrary.load_asset(path)
+        if sound is None:
+            raise RuntimeError("Missing required audio: " + name + ". Copy Tools/AudioSource from this update and rerun preparation.")
+        changed = sound.get_editor_property("looping") != looping
+        if changed:
+            sound.set_editor_property("looping", looping)
+        if looping:
+            mode = unreal.VirtualizationMode.PLAY_WHEN_SILENT
+            if sound.get_editor_property("virtualization_mode") != mode:
+                sound.set_editor_property("virtualization_mode", mode)
+                changed = True
+        if changed and not unreal.EditorAssetLibrary.save_asset(path, only_if_is_dirty=False):
+            raise RuntimeError("Could not save audio settings: " + name)
 
 
 def _set_default_maps():
@@ -173,7 +191,7 @@ def prepare():
     _sounds()
     created = _map()
     unreal.log(
-        "CLOCK CAMPAIGN READY / CONTROLS + READABLE SIGNS / 5 SECTORS / 4 CLOCK BRIDGES / 60 ROBOTS. Press Play, then START or ENTER."
+        "TICK TOCK READY / AUDIO + GOLD UI / 5 SECTORS / 4 CLOCK BRIDGES / 60 ROBOTS. Press Play, then START or ENTER. M toggles music."
         + (" Native map, material and sounds have been generated." if created else "")
     )
 
