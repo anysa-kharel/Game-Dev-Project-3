@@ -52,12 +52,16 @@ public:
     int32 LessonStage() const { return ClockLessons::Stage(SectionBefore); }
     FString LessonHint() const;
     bool LessonGeometryReady() const { return bLessonGeometryBuilt; }
+    bool GantryCollisionReady() const;
 private:
     void BuildLessonGeometry();
     void UpdateLessonGeometry();
+    void PrepareRidingGantry();
+    double ConstrainGantryAdvance(double ProposedAge);
     UPROPERTY(Transient) TArray<TObjectPtr<UStaticMeshComponent>> LessonBeams;
+    UPROPERTY(Transient) TObjectPtr<ACAScenery> RidingGantry;
     float StandingCapsuleHeight=0,CrouchedCapsuleHeight=0,CurrentBeamClearance=150;
-    bool bPassedLessonBeam=false,bLessonGeometryBuilt=false;
+    bool bPassedLessonBeam=false,bLessonGeometryBuilt=false,bBlockedByGantry=false;
 };
 
 UENUM(BlueprintType)

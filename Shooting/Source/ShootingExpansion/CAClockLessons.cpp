@@ -4,6 +4,7 @@
 #include "CAReadableSigns.h"
 #include "CATheme.h"
 #include "CAUtil.h"
+#include "GantryCollisionRules.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -17,6 +18,13 @@
 namespace
 {
     const FName CoursePart=TEXT("CAClockLessonPart");
+    const FName GantryActorTag=TEXT("CAIndependentClockGantry");
+    FName GantryTag(int32 Stage) { return FName(*FString::Printf(TEXT("CAIndependentClockGantry%d"),Stage)); }
+    bool OnRotatingClock(ACharacter* Rider,const ACAClockBridge* Bridge)
+    {
+        UPrimitiveComponent* Base=Rider ? Rider->GetMovementBase() : nullptr;
+        return Base && Base->GetOwner()==Bridge && Base->GetAttachParent()==Bridge->Pivot.Get();
+    }
     FName DockTag(int32 Stage) { return FName(*FString::Printf(TEXT("CAClockLessonDock%d"),Stage)); }
     bool OriginalDockPiece(const ACAScenery* Piece,const ACAClockBridge* Bridge)
     {
@@ -86,11 +94,9 @@ void ACAClockBridge::BuildLessonGeometry()
     }
     if (ClockLessons::Crouch(Stage))
     {
-        // Fixed to the root, so the hand rotates underneath this gantry at 12.
-        UStaticMeshComponent* RidingBeam=CourseMesh(Root,FVector(0,-600,
-            CurrentBeamClearance+ClockLessons::BeamHeight*0.5),
-            FVector(ClockLessons::BeamThickness,1600,ClockLessons::BeamHeight),CATheme::Gold(),true);
-        LessonBeams.Add(RidingBeam);
+        // A separate, unattached actor is essential: based movement may ignore
+        // colliders belonging to the rideable hand's own actor.
+        PrepareRidingGantry();
         for (int32 Side : {-1,1})
             CourseMesh(Root,FVector(Side*90,-1440,130),FVector(50,50,260),CATheme::Muted(),true);
         CourseSign(FVector(-1100,-350,340),TEXT("LOW GANTRY AT 12 / C TO CROUCH / STAY LOW UNTIL CLEAR"),1700,72,26);
@@ -103,7 +109,81 @@ void ACAClockBridge::BuildLessonGeometry()
         CourseSign(FVector(-1200,0,290),TEXT("THE HAND WAITS AT 3 / WALK TO THE GOLD TIP, THEN JUMP"),1850,76,26);
     }
     else CourseSign(FVector(-1200,0,290),TEXT("BOARD AT 9 / RIDE TO 3 / STEP ONTO THE NEXT DOCK"),1600,76,28);
-    bLessonGeometryBuilt=true;
+    bLessonGeometryBuilt=!ClockLessons::Crouch(Stage) || GantryCollisionReady();
+}
+
+void ACAClockBridge::PrepareRidingGantry()
+{
+    if (!GetWorld() || !ClockLessons::Crouch(LessonStage())) return;
+    const FName Marker=GantryTag(LessonStage());
+    TArray<ACAScenery*> Matches;
+    for (TActorIterator<ACAScenery> It(GetWorld());It;++It)
+        if (IsValid(*It) && It->Tags.Contains(GantryActorTag) && It->Tags.Contains(Marker)) Matches.Add(*It);
+    if (!IsValid(RidingGantry) || !Matches.Contains(RidingGantry.Get()))
+        RidingGantry=Matches.Num()>0 ? Matches[0] : nullptr;
+    for (ACAScenery* Extra : Matches) if (Extra!=RidingGantry.Get()) Extra->Destroy();
+
+    const FTransform LocalPose(FQuat::Identity,FVector(0,-600,CurrentBeamClearance+ClockLessons::BeamHeight*0.5));
+    const FTransform WorldPose=LocalPose*Root->GetComponentTransform();
+    if (!IsValid(RidingGantry))
+    {
+        FActorSpawnParameters Parameters;
+        Parameters.bAllowDuringConstructionScript=true;
+        Parameters.OverrideLevel=GetLevel();
+        Parameters.SpawnCollisionHandlingOverride=ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+        RidingGantry=GetWorld()->SpawnActor<ACAScenery>(ACAScenery::StaticClass(),WorldPose,Parameters);
+    }
+    if (!IsValid(RidingGantry)) return;
+    // No owner or attachment to the hand's actor: it must remain an independent
+    // obstacle to character based-movement collision filtering.
+    RidingGantry->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+    RidingGantry->SetOwner(nullptr);
+    RidingGantry->Tags.AddUnique(TEXT("CAExpansion"));
+    RidingGantry->Tags.AddUnique(GantryActorTag);RidingGantry->Tags.AddUnique(Marker);
+    RidingGantry->Dimensions=FVector(ClockLessons::BeamThickness,1600,ClockLessons::BeamHeight);
+    RidingGantry->Shape=TEXT("Cube");RidingGantry->Color=CATheme::Gold();
+    RidingGantry->bSolid=true;RidingGantry->Glow=0;
+    RidingGantry->SetActorTransform(WorldPose);
+    RidingGantry->OnConstruction(WorldPose);
+    RidingGantry->Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+    RidingGantry->Mesh->SetCollisionResponseToChannel(ECC_Pawn,ECR_Block);
+#if WITH_EDITOR
+    RidingGantry->SetFolderPath(FName(TEXT("ClockCampaign/IndependentGantries")));
+#endif
+}
+
+bool ACAClockBridge::GantryCollisionReady() const
+{
+    return IsValid(RidingGantry) && RidingGantry->GetWorld()==GetWorld() && RidingGantry->Mesh &&
+        RidingGantry->Mesh->GetOwner()!=this && RidingGantry->GetOwner()==nullptr &&
+        RidingGantry->GetAttachParentActor()==nullptr && RidingGantry->bSolid &&
+        RidingGantry->Mesh->GetCollisionEnabled()==ECollisionEnabled::QueryAndPhysics &&
+        RidingGantry->Mesh->GetCollisionResponseToChannel(ECC_Pawn)==ECR_Block;
+}
+
+double ACAClockBridge::ConstrainGantryAdvance(double ProposedAge)
+{
+    bBlockedByGantry=false;
+    if (!ClockLessons::Crouch(LessonStage()) || ProposedAge<=Age) return ProposedAge;
+    ACharacter* Rider=UGameplayStatics::GetPlayerCharacter(GetWorld(),0);
+    if (!Rider || !OnRotatingClock(Rider,this) || !Rider->GetCapsuleComponent()) return ProposedAge;
+    if (!GantryCollisionReady()) PrepareRidingGantry();
+    if (!GantryCollisionReady()) { bBlockedByGantry=true;return Age; }
+    const FTransform Frame=Root->GetComponentTransform();
+    const FVector Scale=Frame.GetScale3D().GetAbs();
+    const FVector P=Frame.InverseTransformPosition(Rider->GetCapsuleComponent()->GetComponentLocation());
+    const FVector B=Frame.InverseTransformPosition(RidingGantry->GetActorLocation());
+    const FVector Extent=RidingGantry->Dimensions*0.5;
+    const double Radius=Rider->GetCapsuleComponent()->GetScaledCapsuleRadius()/FMath::Max(0.001,FMath::Min(Scale.X,Scale.Y));
+    const double HalfHeight=Rider->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()/FMath::Max(0.001,Scale.Z);
+    const FBoolProperty* CrouchFlag=FindFProperty<FBoolProperty>(Rider->GetClass(),TEXT("bCrouching"));
+    const bool Crouching=!CrouchFlag || CrouchFlag->GetPropertyValue_InContainer(Rider);
+    const double StandingHalf=StandingCapsuleHeight*0.5/FMath::Max(0.001,Scale.Z);
+    const auto Body=GantryCollision::ForCrouchState({{P.X,P.Y,P.Z},Radius,HalfHeight},StandingHalf,Crouching);
+    const GantryCollision::Beam Obstacle{{B.X,B.Y,B.Z},{Extent.X,Extent.Y,Extent.Z}};
+    const auto Result=GantryCollision::Constrain(Age,ProposedAge,Period,Body,Obstacle);
+    bBlockedByGantry=Result.Blocked;
+    return Result.Age;
 }
 
 void ACAClockBridge::UpdateLessonGeometry()
@@ -129,9 +209,12 @@ void ACAClockBridge::UpdateLessonGeometry()
                 Position.Z=Clearance+ClockLessons::BeamHeight*0.5;
                 Beam->SetRelativeLocation(Position);
             }
+        if (IsValid(RidingGantry))
+            RidingGantry->SetActorLocation(Root->GetComponentTransform().TransformPosition(
+                FVector(0,-600,Clearance+ClockLessons::BeamHeight*0.5)));
     }
     const FVector Offset=Rider->GetActorLocation()-GetActorLocation();
-    if (bStarted && Rider->GetMovementBase()==Hand.Get() &&
+    if (bStarted && OnRotatingClock(Rider,this) &&
         ClockLessons::ClearOfBeam(Offset.X,Offset.Y,Rider->GetCapsuleComponent()->GetScaledCapsuleRadius()))
         bPassedLessonBeam=true;
     if (bStarted && Age>Period*0.8 && CombatRules::AtDock(Angle(),false)) bPassedLessonBeam=false;
@@ -140,8 +223,12 @@ void ACAClockBridge::UpdateLessonGeometry()
 FString ACAClockBridge::LessonHint() const
 {
     ACharacter* Rider=UGameplayStatics::GetPlayerCharacter(GetWorld(),0);
+    if (bBlockedByGantry)
+        return Rider && Rider->GetMovementBase()!=Hand.Get()
+            ? TEXT("BEAM BLOCKED / STEP DOWN ONTO THE HAND, THEN CROUCH")
+            : TEXT("BEAM BLOCKED / C: CROUCH TO CONTINUE");
     const double X=Rider ? Rider->GetActorLocation().X-GetActorLocation().X : -2000;
-    const bool Riding=Rider && Rider->GetMovementBase()==Hand.Get();
+    const bool Riding=OnRotatingClock(Rider,this);
     const auto Cue=ClockLessons::Hint(LessonStage(),X,bStarted,Riding,bPassedLessonBeam,
         CombatRules::AtDock(Angle(),true));
     switch (Cue)
@@ -162,6 +249,17 @@ FString ACAClockBridge::LessonHint() const
 void ACAArenaBuilder::RefreshClockLessons()
 {
     if (!GetWorld() || !bCampaignLayout) return;
+    TArray<ACAScenery*> OrphanedGantries;
+    for (TActorIterator<ACAScenery> Piece(GetWorld());Piece;++Piece)
+    {
+        if (!IsValid(*Piece) || !Piece->Tags.Contains(GantryActorTag)) continue;
+        bool HasClock=false;
+        for (TActorIterator<ACAClockBridge> ClockActor(GetWorld());ClockActor;++ClockActor)
+            if (ClockLessons::Crouch(ClockActor->LessonStage()) && Piece->Tags.Contains(GantryTag(ClockActor->LessonStage())))
+            { HasClock=true;break; }
+        if (!HasClock) OrphanedGantries.Add(*Piece);
+    }
+    for (ACAScenery* Piece : OrphanedGantries) Piece->Destroy();
     for (TActorIterator<ACAClockBridge> Bridge(GetWorld());Bridge;++Bridge)
     {
         const int32 Stage=Bridge->LessonStage();
@@ -189,6 +287,14 @@ bool ACAArenaBuilder::ValidateClockLessons() const
         const int32 Stage=Bridge->LessonStage();
         if (!Stage) continue;
         if (!Bridge->LessonGeometryReady()) return false;
+        if (ClockLessons::Crouch(Stage) && !Bridge->GantryCollisionReady()) return false;
+        if (ClockLessons::Crouch(Stage))
+        {
+            int32 Gantries=0;
+            for (TActorIterator<ACAScenery> It(GetWorld());It;++It)
+                if (IsValid(*It) && It->Tags.Contains(GantryActorTag) && It->Tags.Contains(GantryTag(Stage))) ++Gantries;
+            if (Gantries!=1) return false;
+        }
         ++Seen[Stage];
         if (!ClockLessons::Jump(Stage)) continue;
         int32 DockPieces=0;const auto Dock=ClockLessons::Landing(Bridge->HandLength);

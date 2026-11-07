@@ -1,4 +1,4 @@
-# Clock learning progression — 1.6.0
+# Clock learning progression — 1.6.1
 
 ## Teaching and later application
 
@@ -30,7 +30,10 @@ keeps the eight existing checkpoint indices and sixty-enemy campaign requirement
   side rails, and rail caps. This avoids an invisible floor or rail bridge and
   prevents the old rail ends from obstructing the approach. The floor arrows
   move onto the new landing instead of pointing into the gap.
-- Gantries remain fixed to the clock root while its hand rotates underneath.
+- Riding gantries are independent, unowned world actors while the hand rotates underneath.
+  Their Pawn collision stays active when the character is based on the hand.
+  A swept capsule/arc guard pauses the hand before an obstructed rider reaches
+  the beam and resumes after crouching gives sufficient clearance.
   Their clearance adapts to the actual capsule heights observed during the
   template's custom bCrouching animation. The calibration does not depend on
   native Character crouch state, which this template does not use for its
@@ -57,7 +60,10 @@ were found in the serialized data before modification.
 
 ## Verification
 
-- 5,759 engine-independent C++ checks pass, including 170 new lesson checks.
+- 6,778 engine-independent C++ checks pass, including 170 lesson checks and
+  1,019 gantry collision regressions. The new checks cover standing/crouched
+  riders, partial animations, early uncrouch, multiple radii/frame rates, rail
+  riders, curved return paths, and large frame steps.
   These cover stage selection, parked exits at multiple frame rates, pause and
   retry, the modeled jump path, practice-block clearance, adaptive ceiling
   heights, safe checkpoint positions, dock selection/idempotence, and HUD cues.
@@ -77,7 +83,7 @@ local testing. These independent checks do not establish a grading outcome.
 
 ## Local playtest
 
-1. Rebuild and wait for TICK TOCK READY / RIDE > CROUCH > JUMP > COMBINE.
+1. Rebuild and wait for TICK TOCK READY / GANTRY COLLISION FIX.
 2. Confirm Clock 1 is the original basic ride with no crouch or jump obstruction.
 3. After clearing sector 2, test the safe arch standing/crouching. Ride Clock 2
    under the gantry and check that standing is blocked while crouching fits.
@@ -97,3 +103,5 @@ Primary APIs checked:
 - https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/UCharacterMovementComponent/GetMaxJumpHeight
 - https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/AActor/GetComponents
 - https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/ACharacter
+
+See GANTRY_COLLISION_FIX.md for the independent-obstacle migration and local test.

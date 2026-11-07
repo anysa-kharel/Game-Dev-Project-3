@@ -150,7 +150,7 @@ def _map():
             if actor.get_class().get_path_name() == "/Script/ShootingExpansion.CAArenaBuilder":
                 actor.refresh_presentation()
                 if not actor.validate_clock_lessons():
-                    raise RuntimeError("Clock lessons could not be applied to the saved map. Check all four clocks and both jump landings. Your campaign layout was preserved.")
+                    raise RuntimeError("Clock lessons could not be applied to the saved map. Check the four clocks, jump landings, and independent blocking gantries on clocks 2/4. Your campaign layout was preserved.")
                 refreshed += 1
         if not refreshed:
             raise RuntimeError("The saved arena has no CAArenaBuilder to refresh. Your existing map was preserved.")
@@ -195,7 +195,7 @@ def prepare():
     _sounds()
     created = _map()
     unreal.log(
-        "TICK TOCK READY / RIDE > CROUCH > JUMP > COMBINE / 5 SECTORS / 4 CLOCK LESSONS / 60 ROBOTS. Press Play, then START or ENTER. M toggles music."
+        "TICK TOCK READY / GANTRY COLLISION FIX / RIDE > CROUCH > JUMP > COMBINE / 60 ROBOTS. Press Play, then START or ENTER. M toggles music."
         + (" Native map, material and sounds have been generated." if created else "")
     )
 

@@ -75,6 +75,7 @@ void ACACombatGameMode::SetupPlayer()
     if (ACharacter* Character=Cast<ACharacter>(PlayerPawn))
     {
         Character->GetCharacterMovement()->bIgnoreBaseRotation=true;
+        Character->GetCharacterMovement()->bFastAttachedMove=false;
         Character->GetCharacterMovement()->bImpartBaseAngularVelocity=false;
         for (ACAClockBridge* Bridge : Clocks)
             if (IsValid(Bridge)) Character->GetCharacterMovement()->AddTickPrerequisiteActor(Bridge);

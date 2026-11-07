@@ -81,7 +81,7 @@ float ACAClockBridge::Angle() const
 }
 void ACAClockBridge::ResetClock()
 {
-    Age=0; bStarted=false;bPassedLessonBeam=false;
+    Age=0; bStarted=false;bPassedLessonBeam=false;bBlockedByGantry=false;
     Pivot->SetRelativeRotation(FRotator(0,180,0));
 }
 void ACAClockBridge::Tick(float DeltaSeconds)
@@ -97,7 +97,8 @@ void ACAClockBridge::Tick(float DeltaSeconds)
             && G->CheckpointIndex>=SectionBefore*2-1) bStarted=true;
     }
     else if (G->PlayerPawn->GetActorLocation().X>2550) bStarted=true;
-    Age=ClockLessons::Advance(Age,DeltaSeconds,Period,bStarted,LessonStage());
+    const double ProposedAge=ClockLessons::Advance(Age,DeltaSeconds,Period,bStarted,LessonStage());
+    Age=ConstrainGantryAdvance(ProposedAge);
     Pivot->SetRelativeRotation(FRotator(0,Angle(),0));
 }
 
